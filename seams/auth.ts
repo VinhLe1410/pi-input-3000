@@ -12,6 +12,10 @@ import {
 } from "../core/providers";
 import type { AuthJson } from "../core/types";
 
+const AUTH_COMMAND_TIMEOUT_MS = 2000;
+const AUTH_COMMAND_MAX_BUFFER = 64 * 1024;
+const AUTH_JSON_CACHE_TTL_MS = 2000;
+
 interface CodexCredentials {
   token: string;
   accountId?: string;
@@ -35,19 +39,29 @@ interface GeminiOAuthFile {
   access_token?: string;
 }
 
+let authJsonCache: { loadedAt: number; value: AuthJson } | undefined;
+
 export interface AuthResolver {
   tokenFor(providerKey: UsageProviderKey): string | undefined;
   accountIdFor?(providerKey: UsageProviderKey): string | undefined;
 }
 
 function loadAuthJson(): AuthJson {
+  const now = Date.now();
+  if (authJsonCache && now - authJsonCache.loadedAt < AUTH_JSON_CACHE_TTL_MS) {
+    return authJsonCache.value;
+  }
+
   const authPath = join(homedir(), ".pi", "agent", "auth.json");
+  let value: AuthJson = {};
   try {
     if (existsSync(authPath)) {
-      return JSON.parse(readFileSync(authPath, "utf-8"));
+      value = JSON.parse(readFileSync(authPath, "utf-8")) as AuthJson;
     }
   } catch {}
-  return {};
+
+  authJsonCache = { loadedAt: now, value };
+  return value;
 }
 
 function resolveAuthValue(value: unknown): string | undefined {
@@ -59,8 +73,9 @@ function resolveAuthValue(value: unknown): string | undefined {
     try {
       const output = execSync(trimmed.slice(1), {
         encoding: "utf-8",
+        maxBuffer: AUTH_COMMAND_MAX_BUFFER,
         stdio: ["pipe", "pipe", "pipe"],
-        timeout: 2000,
+        timeout: AUTH_COMMAND_TIMEOUT_MS,
       }).trim();
       return output || undefined;
     } catch {
@@ -97,7 +112,12 @@ function getClaudeToken(): string | undefined {
   try {
     const keychainData = execSync(
       'security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null',
-      { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+      {
+        encoding: "utf-8",
+        maxBuffer: AUTH_COMMAND_MAX_BUFFER,
+        stdio: ["pipe", "pipe", "pipe"],
+        timeout: AUTH_COMMAND_TIMEOUT_MS,
+      },
     ).trim();
     if (keychainData) {
       const parsed = JSON.parse(keychainData) as ClaudeKeychainData;

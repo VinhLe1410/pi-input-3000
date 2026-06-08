@@ -1,9 +1,10 @@
 import { clampPercent, formatResetTime, getWindowLabel } from "../core/format";
 import { fetchWithTimeout } from "../core/network";
-import { providerDisplayName, type UsageProviderKey } from "../core/providers";
+import type { UsageProviderKey } from "../core/providers";
 import type { RateWindow, UsageSnapshot } from "../core/types";
 import type { AuthResolver } from "../seams/auth";
 import type { UsageFetcher } from "./index";
+import { createUsageSnapshotBuilder } from "./snapshot";
 
 interface MinimaxBaseResp {
   status_code?: number;
@@ -36,21 +37,15 @@ export function createMinimaxFetcher(
   return {
     async fetch(): Promise<UsageSnapshot> {
       const providerKey = provider;
+      const snapshot = createUsageSnapshotBuilder(providerKey);
       const token = auth.tokenFor(providerKey);
-      const providerLabel = providerDisplayName(providerKey);
       const endpoint =
         provider === "minimax-cn"
           ? "https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains"
           : "https://api.minimax.io/v1/api/openplatform/coding_plan/remains";
 
       if (!token) {
-        return {
-          providerKey,
-          provider: providerLabel,
-          windows: [],
-          error: "no-auth",
-          fetchedAt: Date.now(),
-        };
+        return snapshot.noAuth();
       }
 
       try {
@@ -63,25 +58,13 @@ export function createMinimaxFetcher(
         });
 
         if (!res.ok) {
-          return {
-            providerKey,
-            provider: providerLabel,
-            windows: [],
-            error: `HTTP ${res.status}`,
-            fetchedAt: Date.now(),
-          };
+          return snapshot.error(`HTTP ${res.status}`);
         }
 
         const data = (await res.json()) as MinimaxUsageResponse;
         const baseResp = data?.base_resp;
         if (baseResp?.status_code && baseResp.status_code !== 0) {
-          return {
-            providerKey,
-            provider: providerLabel,
-            windows: [],
-            error: baseResp.status_msg || `API ${baseResp.status_code}`,
-            fetchedAt: Date.now(),
-          };
+          return snapshot.error(baseResp.status_msg || `API ${baseResp.status_code}`);
         }
 
         const remains = Array.isArray(data?.model_remains) ? data.model_remains : [];
@@ -98,13 +81,7 @@ export function createMinimaxFetcher(
           remains[0];
 
         if (!textBucket) {
-          return {
-            providerKey,
-            provider: providerLabel,
-            windows: [],
-            error: "no-usage-data",
-            fetchedAt: Date.now(),
-          };
+          return snapshot.error("no-usage-data");
         }
 
         const windows: RateWindow[] = [];
@@ -149,15 +126,9 @@ export function createMinimaxFetcher(
           });
         }
 
-        return { providerKey, provider: providerLabel, windows, fetchedAt: Date.now() };
+        return snapshot.success(windows);
       } catch (e: unknown) {
-        return {
-          providerKey,
-          provider: providerLabel,
-          windows: [],
-          error: String(e),
-          fetchedAt: Date.now(),
-        };
+        return snapshot.caught(e);
       }
     },
   };

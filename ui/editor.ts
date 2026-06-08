@@ -1,7 +1,6 @@
 import { CustomEditor } from "@earendil-works/pi-coding-agent";
 import type { KeybindingsManager, Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import {
-  type Component,
   type EditorTheme,
   type TUI,
   truncateToWidth,
@@ -15,58 +14,22 @@ import {
   rgbFg,
   type Rgb,
 } from "./border-chase";
-import { contextColor, thinkingColor } from "./theme";
+import { EDITOR_LAYOUT } from "./design-tokens";
+import { splitRenderedEditor } from "./editor-autocomplete";
+import { renderEditorMetadata } from "./editor-badges";
+import {
+  chaseDistance,
+  createBorderChase,
+  type BorderChase,
+} from "./editor-chase";
+import type { EditorChrome } from "./editor-types";
 
-const RAIL_GAP = " ";
-const RIGHT_RAIL_GAP = " ";
-const CONTEXT_METER_WIDTH = 18;
-const CHASE_TRAIL_RATIO = 0.5;
-const CHASE_HEAVY_RATIO = 0.5;
-const CHASE_HEAD_RATIO = 0.2;
-
-export interface EditorContextMeter {
-  percent: number;
-  label: string;
-}
-
-export interface EditorBranchMeta {
-  name: string;
-  dirty: boolean;
-  ahead: number;
-  behind: number;
-}
-
-export interface EditorMeta {
-  modelLabel: string;
-  thinkingLevel: string;
-  contextMeter?: EditorContextMeter;
-  branch?: EditorBranchMeta;
-}
-
-export interface EditorChrome {
-  meta: EditorMeta;
-  chaseFrameIndex?: number;
-  chaseFrameCount?: number;
-  workingMessage?: string;
-}
-
-interface BorderChase {
-  head: number;
-  perimeter: number;
-  trailLength: number;
-  heavyLength: number;
-  headLength: number;
-}
-
-type AutocompleteEditorInternals = {
-  autocompleteList?: Pick<Component, "render">;
-  isShowingAutocomplete?: () => boolean;
-};
-
-interface EditorFrameParts {
-  editorFrame: string[];
-  autocompleteLines: string[];
-}
+export type {
+  EditorBranchMeta,
+  EditorChrome,
+  EditorContextMeter,
+  EditorMeta,
+} from "./editor-types";
 
 function padRight(text: string, width: number): string {
   return text + " ".repeat(Math.max(0, width - visibleWidth(text)));
@@ -111,15 +74,24 @@ export class PolishedInputEditor extends CustomEditor {
       return clampRenderedLines(super.render(width), width);
     }
 
-    const { editorFrame, autocompleteLines } = this.splitRenderedEditor(rendered, innerWidth);
+    const { editorFrame, autocompleteLines } = splitRenderedEditor(
+      this,
+      rendered,
+      innerWidth,
+    );
     if (editorFrame.length < 2) return clampRenderedLines(rendered, width);
 
     const editorLines = editorFrame.slice(1, -1);
-    const metadata = this.renderMetadata(meta, innerWidth);
+    const metadata = renderEditorMetadata(meta, innerWidth, this.labelTheme);
     const lines = ["", ...editorLines, "", metadata];
     const hasSuggestions = autocompleteLines.length > 0;
     const rowCount = lines.length + autocompleteLines.length + (hasSuggestions ? 1 : 0);
-    const chase = this.createBorderChase(width, rowCount, chrome);
+    const chase = createBorderChase(
+      width,
+      rowCount,
+      chrome.chaseFrameIndex,
+      chrome.chaseFrameCount,
+    );
     const top = this.renderTopBorder(width, chase, chrome.workingMessage);
     const rows = lines.map((line, index) =>
       this.renderContentRow(line, index, rowCount, width, innerWidth, chase),
@@ -144,26 +116,6 @@ export class PolishedInputEditor extends CustomEditor {
     );
   }
 
-  private splitRenderedEditor(rendered: string[], innerWidth: number): EditorFrameParts {
-    const editorInternals = this as unknown as AutocompleteEditorInternals;
-    const isShowingAutocomplete =
-      typeof editorInternals.isShowingAutocomplete === "function" &&
-      editorInternals.isShowingAutocomplete();
-    const autocompleteCount =
-      isShowingAutocomplete && typeof editorInternals.autocompleteList?.render === "function"
-        ? editorInternals.autocompleteList.render(innerWidth).length
-        : 0;
-
-    if (autocompleteCount <= 0 || autocompleteCount >= rendered.length) {
-      return { editorFrame: rendered, autocompleteLines: [] };
-    }
-
-    return {
-      editorFrame: rendered.slice(0, -autocompleteCount),
-      autocompleteLines: rendered.slice(-autocompleteCount),
-    };
-  }
-
   private renderContentRow(
     line: string,
     rowIndex: number,
@@ -182,20 +134,20 @@ export class PolishedInputEditor extends CustomEditor {
     chase?: BorderChase,
   ): string {
     if (rowIndex === undefined || rowCount === undefined || width === undefined) {
-      return this.renderRailBackgroundCell("border") + RAIL_GAP;
+      return this.renderRailBackgroundCell("border") + EDITOR_LAYOUT.railGap;
     }
 
     const pathIndex = width * 2 + rowCount + (rowCount - 1 - rowIndex);
-    return this.renderRailCell(pathIndex, chase) + RAIL_GAP;
+    return this.renderRailCell(pathIndex, chase) + EDITOR_LAYOUT.railGap;
   }
 
   private renderRightRail(rowIndex?: number, width?: number, chase?: BorderChase): string {
     if (rowIndex === undefined || width === undefined) {
-      return RIGHT_RAIL_GAP + this.renderRailBackgroundCell("border");
+      return EDITOR_LAYOUT.rightRailGap + this.renderRailBackgroundCell("border");
     }
 
     const pathIndex = width + rowIndex;
-    return RIGHT_RAIL_GAP + this.renderRailCell(pathIndex, chase);
+    return EDITOR_LAYOUT.rightRailGap + this.renderRailCell(pathIndex, chase);
   }
 
   private renderTopBorder(width: number, chase?: BorderChase, workingMessage?: string): string {
@@ -251,27 +203,8 @@ export class PolishedInputEditor extends CustomEditor {
     }).join("");
   }
 
-  private createBorderChase(
-    width: number,
-    rowCount: number,
-    chrome: EditorChrome,
-  ): BorderChase | undefined {
-    if (chrome.chaseFrameIndex === undefined || !chrome.chaseFrameCount) return undefined;
-
-    const perimeter = Math.max(1, width * 2 + rowCount * 2);
-    const progress = (chrome.chaseFrameIndex % chrome.chaseFrameCount) / chrome.chaseFrameCount;
-    const trailLength = Math.round(perimeter * CHASE_TRAIL_RATIO);
-    return {
-      head: Math.floor(progress * perimeter),
-      perimeter,
-      trailLength,
-      heavyLength: Math.round(trailLength * CHASE_HEAVY_RATIO),
-      headLength: Math.round(trailLength * CHASE_HEAD_RATIO),
-    };
-  }
-
   private renderRailCell(pathIndex: number, chase: BorderChase | undefined): string {
-    const distance = chase ? this.chaseDistance(pathIndex, chase) : undefined;
+    const distance = chase ? chaseDistance(pathIndex, chase) : undefined;
     if (distance !== undefined && chase && distance <= chase.trailLength) {
       return this.renderRailChaseCell(distance, chase);
     }
@@ -310,7 +243,7 @@ export class PolishedInputEditor extends CustomEditor {
     chase: BorderChase | undefined,
     baseColor: "border" | "borderMuted",
   ): string {
-    const distance = chase ? this.chaseDistance(pathIndex, chase) : undefined;
+    const distance = chase ? chaseDistance(pathIndex, chase) : undefined;
     if (distance !== undefined && chase && distance <= chase.trailLength) {
       return this.renderChaseCell(char, distance, chase, baseColor);
     }
@@ -349,79 +282,7 @@ export class PolishedInputEditor extends CustomEditor {
     return this.colorCache.get(color);
   }
 
-  private chaseDistance(pathIndex: number, chase: BorderChase): number {
-    return (chase.head - pathIndex + chase.perimeter) % chase.perimeter;
-  }
-
   private fillLine(content: string, width: number): string {
     return padRight(truncateToWidth(content, Math.max(0, width), ""), width);
-  }
-
-  private renderMetadata(meta: EditorMeta, width: number): string {
-    const left = this.renderIdentityBadge(meta);
-    const right = meta.contextMeter ? this.renderContextMeter(meta.contextMeter) : "";
-
-    if (!right) return truncateToWidth(left, width, "");
-
-    const leftWidth = visibleWidth(left);
-    const rightWidth = visibleWidth(right);
-    const gapWidth = width - leftWidth - rightWidth;
-    if (gapWidth >= 2) return `${left}${" ".repeat(gapWidth)}${right}`;
-
-    return truncateToWidth(left, width, "");
-  }
-
-  private renderIdentityBadge(meta: EditorMeta): string {
-    const model = this.labelTheme.bg(
-      "toolPendingBg",
-      this.labelTheme.bold(this.labelTheme.fg("text", ` ${meta.modelLabel} `)),
-    );
-    const effort = this.renderEffortBadge(meta.thinkingLevel);
-    const branch = meta.branch ? `  ${this.renderBranchBadge(meta.branch)}` : "";
-
-    return `${model}${effort}${branch}`;
-  }
-
-  private renderEffortBadge(thinkingLevel: string): string {
-    if (!thinkingLevel || thinkingLevel === "off") return "";
-
-    return this.labelTheme.inverse(
-      this.labelTheme.bold(
-        this.labelTheme.fg(thinkingColor(thinkingLevel), ` ${thinkingLevel.toUpperCase()} `),
-      ),
-    );
-  }
-
-  private renderBranchBadge(branch: EditorBranchMeta): string {
-    const color = branch.dirty ? "warning" : "success";
-    const ahead = branch.ahead > 0 ? this.labelTheme.fg("success", ` ↑${branch.ahead}`) : "";
-    const behind = branch.behind > 0 ? this.labelTheme.fg("error", ` ↓${branch.behind}`) : "";
-    const dirty = branch.dirty ? this.labelTheme.fg("warning", " *") : "";
-
-    return [
-      this.labelTheme.fg(color, " "),
-      this.labelTheme.bold(this.labelTheme.fg(color, branch.name)),
-      dirty,
-      ahead,
-      behind,
-    ].join("");
-  }
-
-  private renderContextMeter(meter: EditorContextMeter): string {
-    const clampedPercent = Math.max(0, Math.min(100, meter.percent));
-    const filledCells = Math.round((CONTEXT_METER_WIDTH * clampedPercent) / 100);
-    const color = contextColor(meter.percent);
-    const bar = Array.from({ length: CONTEXT_METER_WIDTH }, (_, index) => {
-      const isFilled = index < filledCells;
-      return this.labelTheme.fg(isFilled ? color : "borderMuted", isFilled ? "━" : "─");
-    }).join("");
-
-    return [
-      this.labelTheme.fg("muted", "CTX"),
-      this.labelTheme.fg("borderMuted", " "),
-      bar,
-      this.labelTheme.fg("borderMuted", " "),
-      this.labelTheme.bold(this.labelTheme.fg("text", meter.label)),
-    ].join("");
   }
 }

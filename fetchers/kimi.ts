@@ -1,9 +1,9 @@
 import { clampPercent, formatResetTime, getWindowLabel } from "../core/format";
 import { fetchWithTimeout } from "../core/network";
-import { providerDisplayName, type UsageProviderKey } from "../core/providers";
 import type { RateWindow, UsageSnapshot } from "../core/types";
 import type { AuthResolver } from "../seams/auth";
 import type { UsageFetcher } from "./index";
+import { createUsageSnapshotBuilder } from "./snapshot";
 
 interface KimiLimitDetail {
   limit?: number | string;
@@ -35,20 +35,12 @@ interface KimiUsageResponse {
 export function createKimiFetcher(auth: AuthResolver): UsageFetcher {
   return {
     async fetch(): Promise<UsageSnapshot> {
-      const providerKey: UsageProviderKey = "kimi-coding";
-      const providerLabel = providerDisplayName(providerKey);
+      const providerKey = "kimi-coding";
+      const snapshot = createUsageSnapshotBuilder(providerKey);
       const token = auth.tokenFor(providerKey);
       const endpoint = "https://api.kimi.com/coding/v1/usages";
 
-      if (!token) {
-        return {
-          providerKey,
-          provider: providerLabel,
-          windows: [],
-          error: "no-auth",
-          fetchedAt: Date.now(),
-        };
-      }
+      if (!token) return snapshot.noAuth();
 
       try {
         const res = await fetchWithTimeout(endpoint, {
@@ -60,13 +52,7 @@ export function createKimiFetcher(auth: AuthResolver): UsageFetcher {
         });
 
         if (!res.ok) {
-          return {
-            providerKey,
-            provider: providerLabel,
-            windows: [],
-            error: `HTTP ${res.status}`,
-            fetchedAt: Date.now(),
-          };
+          return snapshot.error(`HTTP ${res.status}`);
         }
 
         const data = (await res.json()) as KimiUsageResponse;
@@ -108,15 +94,9 @@ export function createKimiFetcher(auth: AuthResolver): UsageFetcher {
           });
         }
 
-        return { providerKey, provider: providerLabel, windows, fetchedAt: Date.now() };
+        return snapshot.success(windows);
       } catch (e: unknown) {
-        return {
-          providerKey,
-          provider: providerLabel,
-          windows: [],
-          error: String(e),
-          fetchedAt: Date.now(),
-        };
+        return snapshot.caught(e);
       }
     },
   };

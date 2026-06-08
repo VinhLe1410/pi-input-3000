@@ -1,6 +1,7 @@
 import type { UsageProviderKey } from "../core/providers";
 import type { UsageSnapshot } from "../core/types";
 import type { UsageFetcher } from "../fetchers";
+import { createUsageRefreshController } from "./usage-refresh";
 
 interface UsageStateOptions {
   registry: Map<UsageProviderKey, UsageFetcher>;
@@ -19,9 +20,22 @@ export function createUsageState(options: UsageStateOptions): UsageState {
   const listeners = new Set<() => void>();
 
   let latestUsage: UsageSnapshot | null = null;
-  let activeProvider: UsageProviderKey | null = null;
-  let refreshTimer: ReturnType<typeof setInterval> | null = null;
-  let requestVersion = 0;
+  const refresh = createUsageRefreshController({
+    registry: options.registry,
+    intervalMs: options.intervalMs,
+    onSnapshot(provider, snapshot) {
+      const cached = usageCache.get(provider);
+      if (
+        snapshot.windows.length === 0 &&
+        snapshot.error &&
+        cached?.windows.length
+      )
+        return;
+
+      usageCache.set(provider, snapshot);
+      setLatestUsage(snapshot);
+    },
+  });
 
   function notifyChange(): void {
     for (const listener of listeners) {
@@ -35,43 +49,8 @@ export function createUsageState(options: UsageStateOptions): UsageState {
     notifyChange();
   }
 
-  function fetchAndCache(provider: UsageProviderKey): void {
-    const fetcher = options.registry.get(provider);
-    if (!fetcher) return;
-
-    const cached = usageCache.get(provider);
-    const fetchVersion = ++requestVersion;
-
-    fetcher
-      .fetch()
-      .then((snapshot) => {
-        if (!snapshot) return;
-        if (activeProvider !== provider) return;
-        if (fetchVersion !== requestVersion) return;
-        if (
-          snapshot.windows.length === 0 &&
-          snapshot.error &&
-          cached?.windows.length
-        )
-          return;
-
-        usageCache.set(provider, snapshot);
-        setLatestUsage(snapshot);
-      })
-      .catch(() => {});
-  }
-
-  function startTimer(): void {
-    if (refreshTimer) clearInterval(refreshTimer);
-    refreshTimer = setInterval(() => {
-      if (activeProvider) fetchAndCache(activeProvider);
-    }, options.intervalMs);
-  }
-
   return {
     start(provider: UsageProviderKey): void {
-      activeProvider = provider;
-
       const cached = usageCache.get(provider);
       if (cached && cached.windows.length > 0) {
         setLatestUsage(cached);
@@ -79,16 +58,10 @@ export function createUsageState(options: UsageStateOptions): UsageState {
         setLatestUsage(null);
       }
 
-      fetchAndCache(provider);
-      startTimer();
+      refresh.start(provider);
     },
     stop(): void {
-      activeProvider = null;
-      requestVersion += 1;
-      if (refreshTimer) {
-        clearInterval(refreshTimer);
-        refreshTimer = null;
-      }
+      refresh.stop();
       setLatestUsage(null);
     },
     current(): UsageSnapshot | null {

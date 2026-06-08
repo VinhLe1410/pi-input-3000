@@ -3,6 +3,17 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
+const GIT_COMMAND_TIMEOUT_MS = 5000;
+const GIT_COMMAND_MAX_BUFFER = 1024 * 1024;
+
+function gitExecOptions(cwd: string) {
+  return {
+    cwd,
+    maxBuffer: GIT_COMMAND_MAX_BUFFER,
+    timeout: GIT_COMMAND_TIMEOUT_MS,
+  };
+}
+
 export type GitStatusSummary = {
   branch?: string;
   dirty: boolean;
@@ -96,10 +107,16 @@ export function parseGitStatusPorcelain(
 export async function readGitStatus(cwd: string): Promise<GitStatusSummary> {
   try {
     const [{ stdout: statusStdout }, stashResult] = await Promise.all([
-      execFileAsync("git", ["status", "--porcelain=2", "--branch"], { cwd }),
-      execFileAsync("git", ["rev-parse", "--verify", "--quiet", "refs/stash"], {
-        cwd,
-      }).catch(() => ({ stdout: "" })),
+      execFileAsync(
+        "git",
+        ["status", "--porcelain=2", "--branch"],
+        gitExecOptions(cwd),
+      ),
+      execFileAsync(
+        "git",
+        ["rev-parse", "--verify", "--quiet", "refs/stash"],
+        gitExecOptions(cwd),
+      ).catch(() => ({ stdout: "" })),
     ]);
     const stdoutText = typeof statusStdout === "string" ? statusStdout : String(statusStdout);
     const stashStdout =

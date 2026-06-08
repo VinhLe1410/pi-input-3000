@@ -1,16 +1,18 @@
 import type { ThemeColor } from "@earendil-works/pi-coding-agent";
-
-export const RESET_ICON = "";
+import {
+  CONTEXT_PERCENT_THRESHOLDS,
+  USAGE_PERCENT_THRESHOLDS,
+} from "./design-tokens";
 
 export function percentColor(percent: number): ThemeColor {
-  if (percent >= 85) return "error";
-  if (percent >= 60) return "warning";
+  if (percent >= USAGE_PERCENT_THRESHOLDS.error) return "error";
+  if (percent >= USAGE_PERCENT_THRESHOLDS.warning) return "warning";
   return "success";
 }
 
 export function contextColor(percent: number): ThemeColor {
-  if (percent >= 60) return "error";
-  if (percent >= 40) return "warning";
+  if (percent >= CONTEXT_PERCENT_THRESHOLDS.error) return "error";
+  if (percent >= CONTEXT_PERCENT_THRESHOLDS.warning) return "warning";
   return "success";
 }
 

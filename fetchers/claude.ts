@@ -1,9 +1,9 @@
 import { formatResetTime, normalizePercent } from "../core/format";
 import { fetchWithTimeout } from "../core/network";
-import { providerDisplayName, type UsageProviderKey } from "../core/providers";
 import type { RateWindow, UsageSnapshot } from "../core/types";
 import type { AuthResolver } from "../seams/auth";
 import type { UsageFetcher } from "./index";
+import { createUsageSnapshotBuilder } from "./snapshot";
 
 interface ClaudeUsageResponse {
   five_hour?: { utilization: number; resets_at?: string };
@@ -13,18 +13,10 @@ interface ClaudeUsageResponse {
 export function createClaudeFetcher(auth: AuthResolver): UsageFetcher {
   return {
     async fetch(): Promise<UsageSnapshot> {
-      const providerKey: UsageProviderKey = "claude";
-      const providerLabel = providerDisplayName(providerKey);
+      const providerKey = "claude";
+      const snapshot = createUsageSnapshotBuilder(providerKey);
       const token = auth.tokenFor(providerKey);
-      if (!token) {
-        return {
-          providerKey,
-          provider: providerLabel,
-          windows: [],
-          error: "no-auth",
-          fetchedAt: Date.now(),
-        };
-      }
+      if (!token) return snapshot.noAuth();
 
       try {
         const res = await fetchWithTimeout("https://api.anthropic.com/api/oauth/usage", {
@@ -35,13 +27,7 @@ export function createClaudeFetcher(auth: AuthResolver): UsageFetcher {
         });
 
         if (!res.ok) {
-          return {
-            providerKey,
-            provider: providerLabel,
-            windows: [],
-            error: `HTTP ${res.status}`,
-            fetchedAt: Date.now(),
-          };
+          return snapshot.error(`HTTP ${res.status}`);
         }
 
         const data = (await res.json()) as ClaudeUsageResponse;
@@ -67,15 +53,9 @@ export function createClaudeFetcher(auth: AuthResolver): UsageFetcher {
           });
         }
 
-        return { providerKey, provider: providerLabel, windows, fetchedAt: Date.now() };
+        return snapshot.success(windows);
       } catch (e: unknown) {
-        return {
-          providerKey,
-          provider: providerLabel,
-          windows: [],
-          error: String(e),
-          fetchedAt: Date.now(),
-        };
+        return snapshot.caught(e);
       }
     },
   };

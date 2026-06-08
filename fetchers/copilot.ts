@@ -1,9 +1,9 @@
 import { clampPercent, formatResetTime } from "../core/format";
 import { fetchWithTimeout } from "../core/network";
-import { providerDisplayName, type UsageProviderKey } from "../core/providers";
 import type { RateWindow, UsageSnapshot } from "../core/types";
 import type { AuthResolver } from "../seams/auth";
 import type { UsageFetcher } from "./index";
+import { createUsageSnapshotBuilder } from "./snapshot";
 
 interface CopilotQuotaSnapshot {
   percent_remaining?: number;
@@ -21,18 +21,10 @@ interface CopilotUsageResponse {
 export function createCopilotFetcher(auth: AuthResolver): UsageFetcher {
   return {
     async fetch(): Promise<UsageSnapshot> {
-      const providerKey: UsageProviderKey = "copilot";
-      const providerLabel = providerDisplayName(providerKey);
+      const providerKey = "copilot";
+      const snapshot = createUsageSnapshotBuilder(providerKey);
       const token = auth.tokenFor(providerKey);
-      if (!token) {
-        return {
-          providerKey,
-          provider: providerLabel,
-          windows: [],
-          error: "no-auth",
-          fetchedAt: Date.now(),
-        };
-      }
+      if (!token) return snapshot.noAuth();
 
       try {
         const res = await fetchWithTimeout("https://api.github.com/copilot_internal/user", {
@@ -46,13 +38,7 @@ export function createCopilotFetcher(auth: AuthResolver): UsageFetcher {
         });
 
         if (!res.ok) {
-          return {
-            providerKey,
-            provider: providerLabel,
-            windows: [],
-            error: `HTTP ${res.status}`,
-            fetchedAt: Date.now(),
-          };
+          return snapshot.error(`HTTP ${res.status}`);
         }
 
         const data = (await res.json()) as CopilotUsageResponse;
@@ -80,15 +66,9 @@ export function createCopilotFetcher(auth: AuthResolver): UsageFetcher {
           });
         }
 
-        return { providerKey, provider: providerLabel, windows, fetchedAt: Date.now() };
+        return snapshot.success(windows);
       } catch (e: unknown) {
-        return {
-          providerKey,
-          provider: providerLabel,
-          windows: [],
-          error: String(e),
-          fetchedAt: Date.now(),
-        };
+        return snapshot.caught(e);
       }
     },
   };

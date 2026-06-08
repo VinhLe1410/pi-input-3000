@@ -3,7 +3,7 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import type { GitStatusSummary } from "../seams/git";
-import type { EditorBranchMeta, EditorContextMeter, EditorMeta } from "./editor";
+import type { EditorBranchMeta, EditorContextMeter, EditorMeta } from "./editor-types";
 
 function formatContextWindow(value: number): string {
   if (value >= 1_000_000) {

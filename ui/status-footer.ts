@@ -6,11 +6,9 @@ import type {
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { providerFooterPolicy } from "../core/providers";
 import type { RateWindow, UsageSnapshot } from "../core/types";
+import { FOOTER_LAYOUT, ICONS } from "./design-tokens";
 import { collectExtensionStatusSegments } from "./extension-status";
-import { percentColor, RESET_ICON } from "./theme";
-
-const FOOTER_SEPARATOR = " | ";
-const FOOTER_SIDE_PADDING = 1;
+import { percentColor } from "./theme";
 
 function formatCwdLabel(cwd: string): string {
   const normalized = cwd.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -54,7 +52,7 @@ function renderQuotaBadge(window: RateWindow, theme: Theme): string {
   );
   const percent = theme.inverse(theme.bold(theme.fg(percentColor(rounded), ` ${rounded}% `)));
   const reset = window.resetsIn
-    ? theme.bg("toolPendingBg", theme.fg("text", ` ${RESET_ICON} ${window.resetsIn} `))
+    ? theme.bg("toolPendingBg", theme.fg("text", ` ${ICONS.reset} ${window.resetsIn} `))
     : "";
 
   return `${label}${percent}${reset}`;
@@ -146,9 +144,9 @@ export function renderStatusFooter(
 ): string[] {
   if (width <= 0) return [""];
 
-  const sidePadding = width >= FOOTER_SIDE_PADDING * 2 ? FOOTER_SIDE_PADDING : 0;
+  const sidePadding = width >= FOOTER_LAYOUT.sidePadding * 2 ? FOOTER_LAYOUT.sidePadding : 0;
   const innerWidth = Math.max(0, width - sidePadding * 2);
-  const separator = theme.fg("dim", FOOTER_SEPARATOR);
+  const separator = theme.fg("dim", FOOTER_LAYOUT.separator);
   const left = renderCwd(ctx, theme);
   const right = renderQuotaBadges(usageSnapshot, theme);
   const extensionStatuses = collectExtensionStatusSegments(footerData.getExtensionStatuses());

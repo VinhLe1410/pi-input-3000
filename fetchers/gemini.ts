@@ -1,9 +1,9 @@
 import { clampPercent } from "../core/format";
 import { fetchWithTimeout } from "../core/network";
-import { providerDisplayName, type UsageProviderKey } from "../core/providers";
 import type { RateWindow, UsageSnapshot } from "../core/types";
 import type { AuthResolver } from "../seams/auth";
 import type { UsageFetcher } from "./index";
+import { createUsageSnapshotBuilder } from "./snapshot";
 
 interface GeminiBucket {
   modelId?: string;
@@ -17,18 +17,10 @@ interface GeminiUsageResponse {
 export function createGeminiFetcher(auth: AuthResolver): UsageFetcher {
   return {
     async fetch(): Promise<UsageSnapshot> {
-      const providerKey: UsageProviderKey = "gemini";
-      const providerLabel = providerDisplayName(providerKey);
+      const providerKey = "gemini";
+      const snapshot = createUsageSnapshotBuilder(providerKey);
       const token = auth.tokenFor(providerKey);
-      if (!token) {
-        return {
-          providerKey,
-          provider: providerLabel,
-          windows: [],
-          error: "no-auth",
-          fetchedAt: Date.now(),
-        };
-      }
+      if (!token) return snapshot.noAuth();
 
       try {
         const res = await fetchWithTimeout(
@@ -44,13 +36,7 @@ export function createGeminiFetcher(auth: AuthResolver): UsageFetcher {
         );
 
         if (!res.ok) {
-          return {
-            providerKey,
-            provider: providerLabel,
-            windows: [],
-            error: `HTTP ${res.status}`,
-            fetchedAt: Date.now(),
-          };
+          return snapshot.error(`HTTP ${res.status}`);
         }
 
         const data = (await res.json()) as GeminiUsageResponse;
@@ -94,15 +80,9 @@ export function createGeminiFetcher(auth: AuthResolver): UsageFetcher {
           });
         }
 
-        return { providerKey, provider: providerLabel, windows, fetchedAt: Date.now() };
+        return snapshot.success(windows);
       } catch (e: unknown) {
-        return {
-          providerKey,
-          provider: providerLabel,
-          windows: [],
-          error: String(e),
-          fetchedAt: Date.now(),
-        };
+        return snapshot.caught(e);
       }
     },
   };

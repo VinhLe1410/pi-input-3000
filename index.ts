@@ -15,18 +15,13 @@ import type { UsageProviderKey } from "./core/providers";
 import { createFetcherRegistry } from "./fetchers";
 import { createAuthResolver } from "./seams/auth";
 import { createGitState } from "./seams/git";
+import { createProjectRefreshController } from "./seams/project-refresh";
 import { createUsageState } from "./seams/usage-state";
+import { BORDER_CHASE, BORDER_CHASE_FRAME_COUNT } from "./ui/design-tokens";
 import { PolishedInputEditor, type EditorMeta } from "./ui/editor";
 import { buildEditorMeta, getThinkingLevel } from "./ui/editor-meta";
 import { renderStatusFooter } from "./ui/status-footer";
 import { pickWorkingMessage } from "./whimsical/messages";
-
-const BORDER_CHASE_INTERVAL_MS = 50;
-const BORDER_CHASE_CYCLE_MS = 850;
-const BORDER_CHASE_FRAME_COUNT = Math.max(
-  1,
-  Math.round(BORDER_CHASE_CYCLE_MS / BORDER_CHASE_INTERVAL_MS),
-);
 
 function detectProvider(modelProvider: string | undefined): UsageProviderKey | null {
   return usageProviderForPiProvider(modelProvider);
@@ -40,13 +35,8 @@ export default function (pi: ExtensionAPI) {
     intervalMs: USAGE_REFRESH_INTERVAL,
   });
 
-  let sessionGeneration = 0;
   let activeContext: ExtensionContext | undefined;
   let activeTui: TUI | undefined;
-  let activeCwd: string | undefined;
-  let projectRefreshTimer: ReturnType<typeof setInterval> | undefined;
-  let projectRefreshInFlight = false;
-  let projectRefreshPending = false;
   let requestFooterRender: (() => void) | undefined;
   let cleanupUsageListener: (() => void) | undefined;
   let hasPromptUi = false;
@@ -55,14 +45,6 @@ export default function (pi: ExtensionAPI) {
   let borderChaseFrameIndex = 0;
   let workingMessage: string | undefined;
   let editorMeta: EditorMeta | undefined;
-
-  function isCurrentSession(generation: number): boolean {
-    return generation === sessionGeneration;
-  }
-
-  function isCurrentProjectRefresh(generation: number, cwd: string): boolean {
-    return isCurrentSession(generation) && cwd === activeCwd;
-  }
 
   function refreshEditorMeta(ctx = activeContext): void {
     if (!ctx) return;
@@ -104,61 +86,19 @@ export default function (pi: ExtensionAPI) {
     borderChaseTimer = setInterval(() => {
       borderChaseFrameIndex = (borderChaseFrameIndex + 1) % BORDER_CHASE_FRAME_COUNT;
       requestUiRender();
-    }, BORDER_CHASE_INTERVAL_MS);
+    }, BORDER_CHASE.intervalMs);
     borderChaseTimer.unref?.();
     requestUiRender();
   }
 
-  function scheduleProjectRefresh(cwd = activeCwd): void {
-    if (!cwd) return;
-    const generation = sessionGeneration;
-
-    if (projectRefreshInFlight) {
-      projectRefreshPending = true;
-      return;
-    }
-
-    projectRefreshInFlight = true;
-    git
-      .refresh(cwd, () => isCurrentProjectRefresh(generation, cwd))
-      .then((gitChanged) => {
-        if (!isCurrentProjectRefresh(generation, cwd)) return;
-        if (!gitChanged) return;
-
-        refreshEditorMeta();
-        requestUiRender();
-      })
-      .finally(() => {
-        if (!isCurrentProjectRefresh(generation, cwd)) return;
-
-        projectRefreshInFlight = false;
-        if (projectRefreshPending) {
-          projectRefreshPending = false;
-          scheduleProjectRefresh(cwd);
-        }
-      });
-  }
-
-  function startProjectRefresh(cwd: string): void {
-    activeCwd = cwd;
-    if (projectRefreshTimer) clearInterval(projectRefreshTimer);
-    scheduleProjectRefresh(cwd);
-    projectRefreshTimer = setInterval(
-      () => scheduleProjectRefresh(cwd),
-      PROJECT_REFRESH_INTERVAL_MS,
-    );
-    projectRefreshTimer.unref?.();
-  }
-
-  function stopProjectRefresh(): void {
-    if (projectRefreshTimer) {
-      clearInterval(projectRefreshTimer);
-      projectRefreshTimer = undefined;
-    }
-    projectRefreshInFlight = false;
-    projectRefreshPending = false;
-    activeCwd = undefined;
-  }
+  const projectRefresh = createProjectRefreshController({
+    git,
+    intervalMs: PROJECT_REFRESH_INTERVAL_MS,
+    onChange: () => {
+      refreshEditorMeta();
+      requestUiRender();
+    },
+  });
 
   function startUsageForProvider(modelProvider: string | undefined): void {
     const provider = detectProvider(modelProvider);
@@ -170,7 +110,6 @@ export default function (pi: ExtensionAPI) {
   }
 
   pi.on("session_start", (_event, ctx) => {
-    sessionGeneration += 1;
     activeContext = ctx;
     refreshEditorMeta(ctx);
 
@@ -183,7 +122,7 @@ export default function (pi: ExtensionAPI) {
     ctx.ui.setWorkingMessage();
     ctx.ui.setWorkingIndicator();
     ctx.ui.setWorkingVisible(false);
-    startProjectRefresh(ctx.cwd);
+    projectRefresh.start(ctx.cwd);
     startUsageForProvider(ctx.model?.provider);
     cleanupUsageListener?.();
 
@@ -228,9 +167,8 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
-    sessionGeneration += 1;
     stopBorderChase(false);
-    stopProjectRefresh();
+    projectRefresh.stop();
     cleanupUsageListener?.();
     cleanupUsageListener = undefined;
     requestFooterRender = undefined;
@@ -263,7 +201,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("turn_end", (_event, ctx) => {
     workingMessage = undefined;
     refreshEditorMeta(ctx);
-    scheduleProjectRefresh();
+    projectRefresh.schedule();
     requestUiRender();
   });
 
