@@ -1,5 +1,6 @@
 import type {
   ExtensionAPI,
+  ExtensionContext,
   ReadonlyFooterDataProvider,
   Theme,
 } from "@earendil-works/pi-coding-agent";
@@ -15,7 +16,7 @@ import { createFetcherRegistry } from "./fetchers";
 import { createAuthResolver } from "./seams/auth";
 import { createGitState } from "./seams/git";
 import { createUsageState } from "./seams/usage-state";
-import { PolishedInputEditor } from "./ui/editor";
+import { PolishedInputEditor, type EditorMeta } from "./ui/editor";
 import { buildEditorMeta, getThinkingLevel } from "./ui/editor-meta";
 import { renderStatusFooter } from "./ui/status-footer";
 import { pickWorkingMessage } from "./whimsical/messages";
@@ -39,6 +40,8 @@ export default function (pi: ExtensionAPI) {
     intervalMs: USAGE_REFRESH_INTERVAL,
   });
 
+  let sessionGeneration = 0;
+  let activeContext: ExtensionContext | undefined;
   let activeTui: TUI | undefined;
   let activeCwd: string | undefined;
   let projectRefreshTimer: ReturnType<typeof setInterval> | undefined;
@@ -51,6 +54,27 @@ export default function (pi: ExtensionAPI) {
   let borderChaseActive = false;
   let borderChaseFrameIndex = 0;
   let workingMessage: string | undefined;
+  let editorMeta: EditorMeta | undefined;
+
+  function isCurrentSession(generation: number): boolean {
+    return generation === sessionGeneration;
+  }
+
+  function isCurrentProjectRefresh(generation: number, cwd: string): boolean {
+    return isCurrentSession(generation) && cwd === activeCwd;
+  }
+
+  function refreshEditorMeta(ctx = activeContext): void {
+    if (!ctx) return;
+    activeContext = ctx;
+    const thinkingLevel = getThinkingLevel(ctx);
+    editorMeta = buildEditorMeta(ctx, git.current(), thinkingLevel);
+  }
+
+  function currentEditorMeta(ctx: ExtensionContext): EditorMeta {
+    if (!editorMeta) refreshEditorMeta(ctx);
+    return editorMeta ?? buildEditorMeta(ctx, git.current(), "off");
+  }
 
   function requestUiRender(): void {
     if (activeTui) {
@@ -87,6 +111,8 @@ export default function (pi: ExtensionAPI) {
 
   function scheduleProjectRefresh(cwd = activeCwd): void {
     if (!cwd) return;
+    const generation = sessionGeneration;
+
     if (projectRefreshInFlight) {
       projectRefreshPending = true;
       return;
@@ -94,11 +120,17 @@ export default function (pi: ExtensionAPI) {
 
     projectRefreshInFlight = true;
     git
-      .refresh(cwd)
+      .refresh(cwd, () => isCurrentProjectRefresh(generation, cwd))
       .then((gitChanged) => {
-        if (gitChanged) activeTui?.requestRender();
+        if (!isCurrentProjectRefresh(generation, cwd)) return;
+        if (!gitChanged) return;
+
+        refreshEditorMeta();
+        requestUiRender();
       })
       .finally(() => {
+        if (!isCurrentProjectRefresh(generation, cwd)) return;
+
         projectRefreshInFlight = false;
         if (projectRefreshPending) {
           projectRefreshPending = false;
@@ -138,6 +170,10 @@ export default function (pi: ExtensionAPI) {
   }
 
   pi.on("session_start", (_event, ctx) => {
+    sessionGeneration += 1;
+    activeContext = ctx;
+    refreshEditorMeta(ctx);
+
     if (!ctx.hasUI) {
       hasPromptUi = false;
       return;
@@ -160,15 +196,12 @@ export default function (pi: ExtensionAPI) {
         tui,
         theme,
         keybindings,
-        () => {
-          const thinkingLevel = getThinkingLevel(ctx);
-          return {
-            meta: buildEditorMeta(ctx, git.current(), thinkingLevel),
-            chaseFrameIndex: borderChaseActive ? borderChaseFrameIndex : undefined,
-            chaseFrameCount: BORDER_CHASE_FRAME_COUNT,
-            workingMessage,
-          };
-        },
+        () => ({
+          meta: currentEditorMeta(ctx),
+          chaseFrameIndex: borderChaseActive ? borderChaseFrameIndex : undefined,
+          chaseFrameCount: BORDER_CHASE_FRAME_COUNT,
+          workingMessage,
+        }),
         ctx.ui.theme,
       );
     });
@@ -195,14 +228,17 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
+    sessionGeneration += 1;
     stopBorderChase(false);
     stopProjectRefresh();
     cleanupUsageListener?.();
     cleanupUsageListener = undefined;
     requestFooterRender = undefined;
+    activeContext = undefined;
     activeTui = undefined;
     hasPromptUi = false;
     workingMessage = undefined;
+    editorMeta = undefined;
     usage.stop();
 
     if (!ctx.hasUI) return;
@@ -224,18 +260,21 @@ export default function (pi: ExtensionAPI) {
     stopBorderChase();
   });
 
-  pi.on("turn_end", () => {
+  pi.on("turn_end", (_event, ctx) => {
     workingMessage = undefined;
+    refreshEditorMeta(ctx);
     scheduleProjectRefresh();
-    activeTui?.requestRender();
+    requestUiRender();
   });
 
-  pi.on("model_select", (event) => {
+  pi.on("model_select", (event, ctx) => {
     startUsageForProvider(event.model.provider);
-    activeTui?.requestRender();
+    refreshEditorMeta(ctx);
+    requestUiRender();
   });
 
-  pi.on("thinking_level_select", () => {
-    activeTui?.requestRender();
+  pi.on("thinking_level_select", (_event, ctx) => {
+    refreshEditorMeta(ctx);
+    requestUiRender();
   });
 }

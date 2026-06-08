@@ -19,7 +19,7 @@ export type GitStatusSummary = {
 };
 
 export interface GitState {
-  refresh(cwd: string): Promise<boolean>;
+  refresh(cwd: string, shouldApply?: () => boolean): Promise<boolean>;
   current(): GitStatusSummary;
 }
 
@@ -131,8 +131,10 @@ export function createGitState(): GitState {
   let cache = emptyGitStatus();
 
   return {
-    async refresh(cwd: string): Promise<boolean> {
+    async refresh(cwd: string, shouldApply = () => true): Promise<boolean> {
       const next = await readGitStatus(cwd);
+      if (!shouldApply()) return false;
+
       const changed = !sameGitStatus(cache, next);
       cache = next;
       return changed;
