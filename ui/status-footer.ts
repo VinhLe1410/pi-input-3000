@@ -4,11 +4,12 @@ import type {
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { providerFooterPolicy } from "../core/providers";
-import type { RateWindow, UsageSnapshot } from "../core/types";
 import { FOOTER_LAYOUT, ICONS } from "./design-tokens";
 import { collectExtensionStatusSegments } from "./extension-status";
-import { percentColor } from "./theme";
+
+interface StatusFooterOptions {
+  rightSegments?: readonly string[];
+}
 
 function formatCwdLabel(cwd: string): string {
   const normalized = cwd.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -17,62 +18,22 @@ function formatCwdLabel(cwd: string): string {
 }
 
 function renderCwd(ctx: ExtensionContext, theme: Theme): string {
-  return theme.fg("accent", `󰝰 ${formatCwdLabel(ctx.cwd)}`);
-}
-
-function usageWindows(snapshot: UsageSnapshot | null): RateWindow[] {
-  if (!snapshot) return [];
-
-  const includeWindowLabels = providerFooterPolicy(
-    snapshot.providerKey,
-  )?.includeWindowLabels;
-  if (!includeWindowLabels) return snapshot.windows;
-
-  const allowedLabels = new Set(
-    includeWindowLabels.map((label) => label.toLowerCase()),
-  );
-  return snapshot.windows.filter((window) =>
-    allowedLabels.has(window.label.toLowerCase()),
-  );
-}
-
-function formatQuotaWindowLabel(label: string): string {
-  const normalized = label.trim().toLowerCase();
-  if (normalized === "week" || normalized === "weekly" || normalized === "7d") return "7D";
-  if (normalized === "5h") return "5H";
-  if (normalized === "premium") return "PREM";
-  return label.trim().toUpperCase();
-}
-
-function renderQuotaBadge(window: RateWindow, theme: Theme): string {
-  const rounded = Math.max(0, Math.min(999, Math.round(window.usedPercent)));
-  const label = theme.bg(
-    "toolPendingBg",
-    theme.bold(theme.fg("muted", ` ${formatQuotaWindowLabel(window.label)} `)),
-  );
-  const percent = theme.inverse(theme.bold(theme.fg(percentColor(rounded), ` ${rounded}% `)));
-  const reset = window.resetsIn
-    ? theme.bg("toolPendingBg", theme.fg("text", ` ${ICONS.reset} ${window.resetsIn} `))
-    : "";
-
-  return `${label}${percent}${reset}`;
-}
-
-function renderQuotaBadges(snapshot: UsageSnapshot | null, theme: Theme): string {
-  return usageWindows(snapshot)
-    .map((window) => renderQuotaBadge(window, theme))
-    .join(theme.fg("borderMuted", " "));
+  return theme.fg("accent", `${ICONS.cwd} ${formatCwdLabel(ctx.cwd)}`);
 }
 
 function renderStatusChip(text: string, theme: Theme): string {
-  return [theme.fg("success", ""), " ", theme.fg("dim", text)].join("");
+  return [theme.fg("success", ICONS.extensionStatus), " ", theme.fg("dim", text)].join("");
 }
 
-function joinStatusTexts(statusTexts: string[], separator: string): string {
+function joinStatusTexts(statusTexts: readonly string[], separator: string): string {
   return statusTexts.filter(Boolean).join(separator);
 }
 
-function fitStatusTexts(statusTexts: string[], maxWidth: number, separator: string): string {
+function fitStatusTexts(
+  statusTexts: readonly string[],
+  maxWidth: number,
+  separator: string,
+): string {
   if (maxWidth <= 0) return "";
 
   const fitted: string[] = [];
@@ -111,7 +72,7 @@ function composeBuiltInFooterContent(left: string, right: string, width: number)
 function composeFooter(
   left: string,
   right: string,
-  extensionRight: string[],
+  extensionRight: readonly string[],
   separator: string,
   width: number,
 ): string {
@@ -138,9 +99,9 @@ function composeFooter(
 export function renderStatusFooter(
   ctx: ExtensionContext,
   footerData: ReadonlyFooterDataProvider,
-  usageSnapshot: UsageSnapshot | null,
   width: number,
   theme: Theme,
+  options: StatusFooterOptions = {},
 ): string[] {
   if (width <= 0) return [""];
 
@@ -148,15 +109,17 @@ export function renderStatusFooter(
   const innerWidth = Math.max(0, width - sidePadding * 2);
   const separator = theme.fg("dim", FOOTER_LAYOUT.separator);
   const left = renderCwd(ctx, theme);
-  const right = renderQuotaBadges(usageSnapshot, theme);
+  const right = joinStatusTexts(options.rightSegments ?? [], theme.fg("borderMuted", " "));
   const extensionStatuses = collectExtensionStatusSegments(footerData.getExtensionStatuses());
-  const renderExtensionStatus = (text: string) => renderStatusChip(text, theme);
   const content = composeFooter(
     left,
     right,
-    extensionStatuses.map((segment) => renderExtensionStatus(segment.text)),
+    extensionStatuses.map((segment) => renderStatusChip(segment.text, theme)),
     separator,
     innerWidth,
   );
-  return [`${" ".repeat(sidePadding)}${truncateToWidth(content, innerWidth, "")}${" ".repeat(sidePadding)}`];
+
+  return [
+    `${" ".repeat(sidePadding)}${truncateToWidth(content, innerWidth, "")}${" ".repeat(sidePadding)}`,
+  ];
 }

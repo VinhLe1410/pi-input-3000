@@ -1,7 +1,9 @@
+import { FETCH_TIMEOUT_MS } from "./runtime-config";
+
 export async function fetchWithTimeout(
   url: string,
   init: RequestInit,
-  timeoutMs = 5000,
+  timeoutMs = FETCH_TIMEOUT_MS,
 ): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);

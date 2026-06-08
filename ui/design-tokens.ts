@@ -22,8 +22,26 @@ export const FOOTER_LAYOUT = {
   sidePadding: 1,
 } as const;
 
+export const EDITOR_CHROME = {
+  topCap: "▄",
+  bottomCap: "▀",
+  horizontal: "─",
+  heavyHorizontal: "━",
+  railCell: " ",
+} as const;
+
 export const ICONS = {
+  cwd: "󰝰",
+  extensionStatus: "",
+  gitBranch: "",
   reset: "",
+} as const;
+
+export const QUOTA_BADGE_LABELS: Record<string, string> = {
+  week: "7D",
+  weekly: "7D",
+  "7d": "7D",
+  "5h": "5H",
 } as const;
 
 export const USAGE_PERCENT_THRESHOLDS = {

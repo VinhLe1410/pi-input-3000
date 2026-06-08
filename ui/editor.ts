@@ -14,7 +14,7 @@ import {
   rgbFg,
   type Rgb,
 } from "./border-chase";
-import { EDITOR_LAYOUT } from "./design-tokens";
+import { EDITOR_CHROME, EDITOR_LAYOUT } from "./design-tokens";
 import { splitRenderedEditor } from "./editor-autocomplete";
 import { renderEditorMetadata } from "./editor-badges";
 import {
@@ -56,6 +56,11 @@ export class PolishedInputEditor extends CustomEditor {
     this.borderColor = (text: string) => labelTheme.fg("border", text);
     this.getChrome = getChrome;
     this.labelTheme = labelTheme;
+  }
+
+  override invalidate(): void {
+    super.invalidate();
+    this.colorCache.clear();
   }
 
   render(width: number): string[] {
@@ -152,7 +157,11 @@ export class PolishedInputEditor extends CustomEditor {
 
   private renderTopBorder(width: number, chase?: BorderChase, workingMessage?: string): string {
     const chars: string[] = Array.from({ length: Math.max(0, width) }, (_, index) =>
-      width <= 1 ? "▄" : index === 0 || index === width - 1 ? "▄" : "─",
+      width <= 1
+        ? EDITOR_CHROME.topCap
+        : index === 0 || index === width - 1
+          ? EDITOR_CHROME.topCap
+          : EDITOR_CHROME.horizontal,
     );
 
     if (workingMessage && width >= 8) {
@@ -186,13 +195,17 @@ export class PolishedInputEditor extends CustomEditor {
         return this.renderRailBackgroundCell("border");
       }
 
-      return this.labelTheme.fg("borderMuted", "─");
+      return this.labelTheme.fg("borderMuted", EDITOR_CHROME.horizontal);
     }).join("");
   }
 
   private renderBottomBorder(width: number, rowCount: number, chase?: BorderChase): string {
     return Array.from({ length: Math.max(0, width) }, (_, index) => {
-      const char = width <= 1 ? "▀" : index === 0 || index === width - 1 ? "▀" : "─";
+      const char = width <= 1
+        ? EDITOR_CHROME.bottomCap
+        : index === 0 || index === width - 1
+          ? EDITOR_CHROME.bottomCap
+          : EDITOR_CHROME.horizontal;
       const pathIndex = width + rowCount + (width - 1 - index);
       return this.renderBorderCell(
         char,
@@ -214,9 +227,13 @@ export class PolishedInputEditor extends CustomEditor {
 
   private renderRailBackgroundCell(color: ThemeColor): string {
     const rgb = color === "border" ? this.currentBorderRgb() : this.themeRgb(color);
-    if (rgb) return rgbBg(rgb, " ");
+    if (rgb) return rgbBg(rgb, EDITOR_CHROME.railCell);
 
-    return this.labelTheme.inverse(color === "border" ? this.borderColor(" ") : this.labelTheme.fg(color, " "));
+    return this.labelTheme.inverse(
+      color === "border"
+        ? this.borderColor(EDITOR_CHROME.railCell)
+        : this.labelTheme.fg(color, EDITOR_CHROME.railCell),
+    );
   }
 
   private renderRailChaseCell(distance: number, chase: BorderChase): string {

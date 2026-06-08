@@ -1,6 +1,6 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { EDITOR_LAYOUT } from "./design-tokens";
+import { EDITOR_CHROME, EDITOR_LAYOUT, ICONS } from "./design-tokens";
 import type { EditorBranchMeta, EditorContextMeter, EditorMeta } from "./editor-types";
 import { contextColor, thinkingColor } from "./theme";
 
@@ -50,7 +50,7 @@ function renderBranchBadge(branch: EditorBranchMeta, theme: Theme): string {
   const dirty = branch.dirty ? theme.fg("warning", " *") : "";
 
   return [
-    theme.fg(color, " "),
+    theme.fg(color, `${ICONS.gitBranch} `),
     theme.bold(theme.fg(color, branch.name)),
     dirty,
     ahead,
@@ -66,7 +66,10 @@ function renderContextMeter(meter: EditorContextMeter, theme: Theme): string {
   const color = contextColor(meter.percent);
   const bar = Array.from({ length: EDITOR_LAYOUT.contextMeterWidth }, (_, index) => {
     const isFilled = index < filledCells;
-    return theme.fg(isFilled ? color : "borderMuted", isFilled ? "━" : "─");
+    return theme.fg(
+      isFilled ? color : "borderMuted",
+      isFilled ? EDITOR_CHROME.heavyHorizontal : EDITOR_CHROME.horizontal,
+    );
   }).join("");
 
   return [

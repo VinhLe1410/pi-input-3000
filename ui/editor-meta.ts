@@ -28,6 +28,8 @@ function buildContextMeter(ctx: ExtensionContext): EditorContextMeter | undefine
   const contextWindow = usage?.contextWindow ?? ctx.model?.contextWindow;
   if (!contextWindow || contextWindow <= 0) return undefined;
 
+  if (usage && (usage.tokens === null || usage.percent === null)) return undefined;
+
   const tokens = usage?.tokens ?? 0;
   const percent = usage?.percent ?? (tokens / contextWindow) * 100;
   const roundedPercent = Math.max(0, Math.min(999, Math.round(percent)));

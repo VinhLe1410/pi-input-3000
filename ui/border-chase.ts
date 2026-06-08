@@ -1,3 +1,5 @@
+import { EDITOR_CHROME } from "./design-tokens";
+
 interface Rgb {
   r: number;
   g: number;
@@ -74,7 +76,7 @@ export function rgbBg(rgb: Rgb, text: string): string {
 }
 
 export function heavyBorderChar(char: string): string {
-  return char === "─" ? "━" : char;
+  return char === EDITOR_CHROME.horizontal ? EDITOR_CHROME.heavyHorizontal : char;
 }
 
 export type { Rgb };

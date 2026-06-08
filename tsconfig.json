@@ -15,7 +15,7 @@
   "include": [
     "index.ts",
     "core/**/*.ts",
-    "fetchers/**/*.ts",
+    "features/**/*.ts",
     "seams/**/*.ts",
     "ui/**/*.ts",
     "whimsical/**/*.ts"

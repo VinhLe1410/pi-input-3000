@@ -8,37 +8,23 @@ import type { KeybindingsManager } from "@earendil-works/pi-coding-agent";
 import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 import {
   PROJECT_REFRESH_INTERVAL_MS,
-  USAGE_REFRESH_INTERVAL,
-} from "./core/constants";
-import { usageProviderForPiProvider } from "./core/providers";
-import type { UsageProviderKey } from "./core/providers";
-import { createFetcherRegistry } from "./fetchers";
-import { createAuthResolver } from "./seams/auth";
+  USAGE_QUOTA_REFRESH_INTERVAL_MS,
+} from "./core/runtime-config";
+import { createUsageQuotaFeature } from "./features/usage-quota";
 import { createGitState } from "./seams/git";
 import { createProjectRefreshController } from "./seams/project-refresh";
-import { createUsageState } from "./seams/usage-state";
 import { BORDER_CHASE, BORDER_CHASE_FRAME_COUNT } from "./ui/design-tokens";
 import { PolishedInputEditor, type EditorMeta } from "./ui/editor";
 import { buildEditorMeta, getThinkingLevel } from "./ui/editor-meta";
 import { renderStatusFooter } from "./ui/status-footer";
 import { pickWorkingMessage } from "./whimsical/messages";
 
-function detectProvider(modelProvider: string | undefined): UsageProviderKey | null {
-  return usageProviderForPiProvider(modelProvider);
-}
-
 export default function (pi: ExtensionAPI) {
-  const auth = createAuthResolver();
   const git = createGitState();
-  const usage = createUsageState({
-    registry: createFetcherRegistry(auth),
-    intervalMs: USAGE_REFRESH_INTERVAL,
-  });
 
   let activeContext: ExtensionContext | undefined;
   let activeTui: TUI | undefined;
   let requestFooterRender: (() => void) | undefined;
-  let cleanupUsageListener: (() => void) | undefined;
   let hasPromptUi = false;
   let borderChaseTimer: ReturnType<typeof setInterval> | undefined;
   let borderChaseActive = false;
@@ -65,6 +51,11 @@ export default function (pi: ExtensionAPI) {
     }
     requestFooterRender?.();
   }
+
+  const usageQuota = createUsageQuotaFeature({
+    intervalMs: USAGE_QUOTA_REFRESH_INTERVAL_MS,
+    onChange: requestUiRender,
+  });
 
   function stopBorderChase(render = true): void {
     const wasRunning = borderChaseActive || borderChaseTimer !== undefined;
@@ -100,36 +91,24 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  function startUsageForProvider(modelProvider: string | undefined): void {
-    const provider = detectProvider(modelProvider);
-    if (provider) {
-      usage.start(provider);
-    } else {
-      usage.stop();
-    }
-  }
-
   pi.on("session_start", (_event, ctx) => {
     activeContext = ctx;
     refreshEditorMeta(ctx);
 
-    if (!ctx.hasUI) {
+    if (ctx.mode !== "tui") {
       hasPromptUi = false;
       return;
     }
 
-    hasPromptUi = ctx.mode === "tui";
+    hasPromptUi = true;
     ctx.ui.setWorkingMessage();
     ctx.ui.setWorkingIndicator();
     ctx.ui.setWorkingVisible(false);
     projectRefresh.start(ctx.cwd);
-    startUsageForProvider(ctx.model?.provider);
-    cleanupUsageListener?.();
+    usageQuota.start(ctx);
 
     ctx.ui.setEditorComponent((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
-      cleanupUsageListener?.();
       activeTui = tui;
-      cleanupUsageListener = usage.onChange(() => tui.requestRender());
 
       return new PolishedInputEditor(
         tui,
@@ -154,13 +133,9 @@ export default function (pi: ExtensionAPI) {
         },
         invalidate() {},
         render(width: number): string[] {
-          return renderStatusFooter(
-            ctx,
-            footerData,
-            usage.current(),
-            width,
-            theme,
-          );
+          return renderStatusFooter(ctx, footerData, width, theme, {
+            rightSegments: usageQuota.renderSegments(theme),
+          });
         },
       };
     });
@@ -169,17 +144,15 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_shutdown", (_event, ctx) => {
     stopBorderChase(false);
     projectRefresh.stop();
-    cleanupUsageListener?.();
-    cleanupUsageListener = undefined;
+    usageQuota.stop();
     requestFooterRender = undefined;
     activeContext = undefined;
     activeTui = undefined;
     hasPromptUi = false;
     workingMessage = undefined;
     editorMeta = undefined;
-    usage.stop();
 
-    if (!ctx.hasUI) return;
+    if (ctx.mode !== "tui") return;
     ctx.ui.setWorkingMessage();
     ctx.ui.setWorkingIndicator();
     ctx.ui.setWorkingVisible(true);
@@ -205,8 +178,9 @@ export default function (pi: ExtensionAPI) {
     requestUiRender();
   });
 
-  pi.on("model_select", (event, ctx) => {
-    startUsageForProvider(event.model.provider);
+  pi.on("model_select", (_event, ctx) => {
+    if (ctx.mode === "tui") usageQuota.start(ctx);
+    else usageQuota.stop();
     refreshEditorMeta(ctx);
     requestUiRender();
   });
