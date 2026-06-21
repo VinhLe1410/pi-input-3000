@@ -12,7 +12,7 @@ import { createUsageQuotaFeature } from "./features/usage-quota";
 import { createGitState } from "./seams/git";
 import { createProjectRefreshController } from "./seams/project-refresh";
 import { BORDER_CHASE, BORDER_CHASE_FRAME_COUNT } from "./ui/design-tokens";
-import { PolishedInputEditor, type EditorMeta } from "./ui/editor";
+import { PolishedInputEditor } from "./ui/editor";
 import { buildEditorMeta, getThinkingLevel } from "./ui/editor-meta";
 import { renderStatusFooter } from "./ui/status-footer";
 import { pickWorkingMessage } from "./whimsical/messages";
@@ -20,7 +20,6 @@ import { pickWorkingMessage } from "./whimsical/messages";
 export default function (pi: ExtensionAPI) {
   const git = createGitState();
 
-  let activeContext: ExtensionContext | undefined;
   let activeTui: TUI | undefined;
   let requestFooterRender: (() => void) | undefined;
   let hasPromptUi = false;
@@ -28,18 +27,10 @@ export default function (pi: ExtensionAPI) {
   let borderChaseActive = false;
   let borderChaseFrameIndex = 0;
   let workingMessage: string | undefined;
-  let editorMeta: EditorMeta | undefined;
+  let cachedThinkingLevel: string | undefined;
 
-  function refreshEditorMeta(ctx = activeContext): void {
-    if (!ctx) return;
-    activeContext = ctx;
-    const thinkingLevel = getThinkingLevel(ctx);
-    editorMeta = buildEditorMeta(ctx, git.current(), thinkingLevel);
-  }
-
-  function currentEditorMeta(ctx: ExtensionContext): EditorMeta {
-    if (!editorMeta) refreshEditorMeta(ctx);
-    return editorMeta ?? buildEditorMeta(ctx, git.current(), "off");
+  function refreshThinkingLevel(ctx: ExtensionContext): void {
+    cachedThinkingLevel = getThinkingLevel(ctx);
   }
 
   function requestUiRender(): void {
@@ -83,14 +74,12 @@ export default function (pi: ExtensionAPI) {
     git,
     intervalMs: PROJECT_REFRESH_INTERVAL_MS,
     onChange: () => {
-      refreshEditorMeta();
       requestUiRender();
     },
   });
 
   pi.on("session_start", (_event, ctx) => {
-    activeContext = ctx;
-    refreshEditorMeta(ctx);
+    refreshThinkingLevel(ctx);
 
     if (ctx.mode !== "tui") {
       hasPromptUi = false;
@@ -112,7 +101,11 @@ export default function (pi: ExtensionAPI) {
         theme,
         keybindings,
         () => ({
-          meta: currentEditorMeta(ctx),
+          meta: buildEditorMeta(
+            ctx,
+            git.current(),
+            cachedThinkingLevel ?? getThinkingLevel(ctx),
+          ),
           chaseFrameIndex: borderChaseActive ? borderChaseFrameIndex : undefined,
           chaseFrameCount: BORDER_CHASE_FRAME_COUNT,
           workingMessage,
@@ -143,11 +136,10 @@ export default function (pi: ExtensionAPI) {
     projectRefresh.stop();
     features.sessionShutdown(ctx);
     requestFooterRender = undefined;
-    activeContext = undefined;
     activeTui = undefined;
     hasPromptUi = false;
     workingMessage = undefined;
-    editorMeta = undefined;
+    cachedThinkingLevel = undefined;
 
     if (ctx.mode !== "tui") return;
     ctx.ui.setWorkingMessage();
@@ -170,19 +162,33 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("turn_end", (_event, ctx) => {
     workingMessage = undefined;
-    refreshEditorMeta(ctx);
+    refreshThinkingLevel(ctx);
     projectRefresh.schedule();
+    requestUiRender();
+  });
+
+  pi.on("message_end", () => {
+    requestUiRender();
+  });
+
+  pi.on("session_tree", (_event, ctx) => {
+    refreshThinkingLevel(ctx);
+    requestUiRender();
+  });
+
+  pi.on("session_compact", (_event, ctx) => {
+    refreshThinkingLevel(ctx);
     requestUiRender();
   });
 
   pi.on("model_select", (_event, ctx) => {
     features.modelSelect(ctx);
-    refreshEditorMeta(ctx);
+    refreshThinkingLevel(ctx);
     requestUiRender();
   });
 
   pi.on("thinking_level_select", (_event, ctx) => {
-    refreshEditorMeta(ctx);
+    refreshThinkingLevel(ctx);
     requestUiRender();
   });
 }

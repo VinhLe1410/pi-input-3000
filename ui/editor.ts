@@ -88,7 +88,7 @@ export class PolishedInputEditor extends CustomEditor {
 
     const editorLines = editorFrame.slice(1, -1);
     const metadata = renderEditorMetadata(meta, innerWidth, this.labelTheme);
-    const lines = ["", ...editorLines, "", metadata];
+    const lines = [...editorLines, "", metadata];
     const hasSuggestions = autocompleteLines.length > 0;
     const rowCount = lines.length + autocompleteLines.length + (hasSuggestions ? 1 : 0);
     const chase = createBorderChase(
