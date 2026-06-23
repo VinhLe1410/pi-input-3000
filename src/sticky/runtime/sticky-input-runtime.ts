@@ -1,10 +1,10 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Component, TUI } from "@earendil-works/pi-tui";
-import { renderPinnedCluster, hidePinnedSlots } from "./pinned-cluster-policy";
-import { PiTuiAdapter } from "./pi-tui-adapter";
-import { discoverStickySlots } from "./slot-discovery";
-import { TerminalSplitCompositor } from "./terminal-split";
-import { installStickyUiCapture, type StickyUiCapture } from "./ui-capture";
+import { renderPinnedCluster, hidePinnedSlots } from "../pinned-cluster/pinned-cluster-policy";
+import { TerminalSplitCompositor } from "../terminal-split/compositor";
+import { PiTuiAdapter } from "../tui-integration/pi-tui-patch-adapter";
+import { discoverStickySlots } from "../tui-integration/slot-discovery";
+import { installStickyUiCapture, type StickyUiCapture } from "../tui-integration/pi-ui-capture";
 
 interface StickyInputRuntimeOptions {
   copyToClipboard(text: string): void;

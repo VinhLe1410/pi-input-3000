@@ -1,5 +1,5 @@
 import { Container, type Component, type TUI } from "@earendil-works/pi-tui";
-import type { StickySlots } from "./types";
+import type { StickySlots } from "../pinned-cluster/sticky-slots";
 
 function containerChildren(candidate: Component): Component[] {
   return candidate instanceof Container ? candidate.children : [];

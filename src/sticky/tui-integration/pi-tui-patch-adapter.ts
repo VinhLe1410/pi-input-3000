@@ -1,6 +1,6 @@
 import type { TerminalInputHandler } from "@earendil-works/pi-coding-agent";
 import type { Component, Terminal, TUI } from "@earendil-works/pi-tui";
-import type { ExtendedKeyboardMode } from "./ansi";
+import type { ExtendedKeyboardMode } from "../terminal-split/control-sequences";
 
 interface RenderPatch {
   target: Component;

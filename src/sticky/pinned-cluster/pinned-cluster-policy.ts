@@ -1,7 +1,7 @@
 import type { Component } from "@earendil-works/pi-tui";
-import { renderFixedEditorCluster, type FixedEditorClusterRender } from "./cluster";
-import type { TerminalSplitCompositor } from "./terminal-split";
-import type { StickySlots } from "./types";
+import type { TerminalSplitCompositor } from "../terminal-split/compositor";
+import { renderFixedEditorCluster, type FixedEditorClusterRender } from "./fixed-editor-cluster";
+import type { StickySlots } from "./sticky-slots";
 
 export interface PinnedClusterPolicy {
   includeStatus: boolean;

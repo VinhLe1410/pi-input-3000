@@ -1,5 +1,5 @@
 import { CURSOR_MARKER, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { stripAnsi } from "./ansi";
+import { stripAnsi } from "../terminal-split/control-sequences";
 
 export interface FixedEditorClusterInput {
   width: number;

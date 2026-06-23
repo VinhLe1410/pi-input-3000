@@ -11,7 +11,7 @@
  */
 
 import { copyToClipboard, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { StickyInputRuntime } from "./runtime";
+import { StickyInputRuntime } from "./runtime/sticky-input-runtime";
 
 export default function installStickyInput(pi: ExtensionAPI) {
   const runtime = new StickyInputRuntime({ copyToClipboard });

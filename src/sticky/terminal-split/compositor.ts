@@ -20,7 +20,7 @@ import {
   stripAnsi,
   stripOscSequences,
   type ExtendedKeyboardMode,
-} from "./ansi";
+} from "./control-sequences";
 import {
   isLeftDrag,
   isLeftPress,
@@ -30,10 +30,9 @@ import {
   parseKeyboardScrollDelta,
   parseSgrMousePackets,
   type SgrMousePacket,
-} from "./terminal-input";
-import type { FixedEditorClusterRender } from "./cluster.ts";
-import { PiTuiAdapter } from "./pi-tui-adapter";
-import { StickyScrollModel, type JumpDirection } from "./scroll-model";
+} from "./input-events";
+import type { FixedEditorClusterRender } from "../pinned-cluster/fixed-editor-cluster";
+import { StickyScrollModel, type JumpDirection } from "../scrollback/scroll-model";
 import {
   isLocationInsideSelection,
   renderSelectionHighlight as renderSelectedLine,
@@ -42,7 +41,8 @@ import {
   type SelectionLocation,
   type SelectionPoint,
   type SelectionSnapshot,
-} from "./selection-model";
+} from "../scrollback/selection-model";
+import { PiTuiAdapter } from "../tui-integration/pi-tui-patch-adapter";
 
 export {
   beginSynchronizedOutput,
@@ -51,7 +51,7 @@ export {
   moveCursor,
   resetScrollRegion,
   setScrollRegion,
-} from "./ansi";
+} from "./control-sequences";
 
 interface TerminalSplitCompositorOptions {
   adapter: PiTuiAdapter;
