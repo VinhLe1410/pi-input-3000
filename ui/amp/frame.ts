@@ -57,8 +57,8 @@ export class AmpInputFrameRenderer {
       "",
       rightLabel,
       width,
-      (text: string) => this.theme.fg("borderMuted", text),
-      (text: string) => this.theme.fg("borderMuted", text),
+      (text: string) => this.theme.fg("text", text),
+      (text: string) => this.theme.fg("text", text),
       { left: AMP_CHROME.topLeft, right: AMP_CHROME.topRight },
     );
   }
@@ -68,18 +68,18 @@ export class AmpInputFrameRenderer {
       "",
       rightLabel,
       width,
-      (text: string) => this.theme.fg("borderMuted", text),
-      (text: string) => this.theme.fg("borderMuted", text),
+      (text: string) => this.theme.fg("text", text),
+      (text: string) => this.theme.fg("text", text),
       { left: AMP_CHROME.bottomLeft, right: AMP_CHROME.bottomRight },
     );
   }
 
   private renderContentRow(line: string, innerWidth: number): string {
-    const border = this.theme.fg("borderMuted", AMP_CHROME.vertical);
+    const border = this.theme.fg("text", AMP_CHROME.vertical);
     return `${border} ${truncateToWidth(line, innerWidth, "", true)} ${border}`;
   }
 
   private renderSuggestionDivider(innerWidth: number): string {
-    return this.theme.fg("borderMuted", AMP_CHROME.horizontal.repeat(innerWidth));
+    return this.theme.fg("text", AMP_CHROME.horizontal.repeat(innerWidth));
   }
 }

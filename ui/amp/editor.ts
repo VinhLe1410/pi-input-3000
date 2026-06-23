@@ -27,6 +27,7 @@ export class AmpInputEditor extends CustomEditor {
     labelTheme: Theme,
   ) {
     super(tui, theme, keybindings, { paddingX: 0 });
+    this.borderColor = (text: string) => labelTheme.fg("text", text);
     this.ctx = ctx;
     this.getThinkingLevel = getThinkingLevel;
     this.labelTheme = labelTheme;
