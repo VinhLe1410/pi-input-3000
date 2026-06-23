@@ -4,7 +4,7 @@ export const BORDER_CHASE = {
   trailRatio: 0.5,
   heavyRatio: 0.5,
   headRatio: 0.2,
-} as const;
+};
 
 export const BORDER_CHASE_FRAME_COUNT = Math.max(
   1,
@@ -15,12 +15,12 @@ export const EDITOR_LAYOUT = {
   railGap: " ",
   rightRailGap: " ",
   contextMeterWidth: 18,
-} as const;
+};
 
 export const FOOTER_LAYOUT = {
   separator: " | ",
   sidePadding: 1,
-} as const;
+};
 
 export const EDITOR_CHROME = {
   topCap: "▄",
@@ -28,20 +28,20 @@ export const EDITOR_CHROME = {
   horizontal: "─",
   heavyHorizontal: "━",
   railCell: " ",
-} as const;
+};
 
 export const ICONS = {
   cwd: "󰝰",
   extensionStatus: "",
   gitBranch: "",
-} as const;
+};
 
 export const USAGE_PERCENT_THRESHOLDS = {
   warning: 60,
   error: 85,
-} as const;
+};
 
 export const CONTEXT_PERCENT_THRESHOLDS = {
   warning: 40,
   error: 60,
-} as const;
+};

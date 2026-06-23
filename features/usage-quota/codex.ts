@@ -17,6 +17,41 @@ interface CodexUsageResponse {
   };
 }
 
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === "object" && value !== null;
+}
+
+function numberField(record: UnknownRecord, key: string): number | undefined {
+  const value = record[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function codexRateWindowFromData(data: unknown): CodexRateWindow | undefined {
+  if (!isRecord(data)) return undefined;
+
+  return {
+    used_percent: numberField(data, "used_percent"),
+    reset_at: numberField(data, "reset_at"),
+    limit_window_seconds: numberField(data, "limit_window_seconds"),
+  };
+}
+
+function codexUsageResponseFromData(data: unknown): CodexUsageResponse {
+  if (!isRecord(data)) return {};
+
+  const rateLimit = data.rate_limit;
+  if (!isRecord(rateLimit)) return {};
+
+  return {
+    rate_limit: {
+      primary_window: codexRateWindowFromData(rateLimit.primary_window),
+      secondary_window: codexRateWindowFromData(rateLimit.secondary_window),
+    },
+  };
+}
+
 function codexWindow(
   id: CodexQuotaWindow["id"],
   window: CodexRateWindow,
@@ -31,7 +66,7 @@ function codexWindow(
   return {
     id,
     label: getWindowLabel(durationMs, fallbackLabel),
-    usedPercent: clampPercent(window.used_percent || 0),
+    usedPercent: clampPercent(window.used_percent ?? 0),
     resetsIn: resetDate ? formatResetTime(resetDate) : undefined,
   };
 }
@@ -58,7 +93,7 @@ export async function fetchCodexQuota(ctx: ExtensionContext): Promise<QuotaState
 
     if (!res.ok) return { kind: "error", error: `HTTP ${res.status}` };
 
-    const data = (await res.json()) as CodexUsageResponse;
+    const data = codexUsageResponseFromData(await res.json());
     const windows: CodexQuotaWindow[] = [];
 
     if (data.rate_limit?.primary_window) {

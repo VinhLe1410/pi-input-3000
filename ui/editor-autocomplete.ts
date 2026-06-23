@@ -1,23 +1,31 @@
 import type { Component } from "@earendil-works/pi-tui";
 import type { EditorFrameParts } from "./editor-types";
 
-type AutocompleteEditorInternals = {
-  autocompleteList?: Pick<Component, "render">;
-  isShowingAutocomplete?: () => boolean;
-};
+type UnknownRecord = Record<string, unknown>;
+type RenderableComponent = Pick<Component, "render">;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === "object" && value !== null;
+}
+
+function isRenderableComponent(value: unknown): value is RenderableComponent {
+  return isRecord(value) && typeof value.render === "function";
+}
 
 export function splitRenderedEditor(
   editor: unknown,
   rendered: string[],
   innerWidth: number,
 ): EditorFrameParts {
-  const editorInternals = editor as AutocompleteEditorInternals;
+  if (!isRecord(editor)) return { editorFrame: rendered, autocompleteLines: [] };
+
   const isShowingAutocomplete =
-    typeof editorInternals.isShowingAutocomplete === "function" &&
-    editorInternals.isShowingAutocomplete();
+    typeof editor.isShowingAutocomplete === "function" &&
+    editor.isShowingAutocomplete();
+  const autocompleteList = editor.autocompleteList;
   const autocompleteCount =
-    isShowingAutocomplete && typeof editorInternals.autocompleteList?.render === "function"
-      ? editorInternals.autocompleteList.render(innerWidth).length
+    isShowingAutocomplete && isRenderableComponent(autocompleteList)
+      ? autocompleteList.render(innerWidth).length
       : 0;
 
   if (autocompleteCount <= 0 || autocompleteCount >= rendered.length) {

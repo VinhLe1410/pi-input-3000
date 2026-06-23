@@ -6,14 +6,22 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { KeybindingsManager } from "@earendil-works/pi-coding-agent";
 import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
+import {
+  loadInputStyleConfig,
+  saveInputStyleConfig,
+  type InputStyle,
+} from "./core/input-style-config";
 import { PROJECT_REFRESH_INTERVAL_MS } from "./core/runtime-config";
 import { createFeatureHost } from "./features/host";
 import { createUsageQuotaFeature } from "./features/usage-quota";
 import { createGitState } from "./seams/git";
 import { createProjectRefreshController } from "./seams/project-refresh";
+import { AmpInputEditor } from "./ui/amp/editor";
 import { BORDER_CHASE, BORDER_CHASE_FRAME_COUNT } from "./ui/design-tokens";
 import { PolishedInputEditor } from "./ui/editor";
+import { EmptyComponent } from "./ui/empty-component";
 import { buildEditorMeta, getThinkingLevel } from "./ui/editor-meta";
+import { showInputStyleMenu } from "./ui/input-style-menu";
 import { renderStatusFooter } from "./ui/status-footer";
 import { pickWorkingMessage } from "./whimsical/messages";
 
@@ -28,6 +36,7 @@ export default function (pi: ExtensionAPI) {
   let borderChaseFrameIndex = 0;
   let workingMessage: string | undefined;
   let cachedThinkingLevel: string | undefined;
+  let activeStyle: InputStyle = loadInputStyleConfig().style;
 
   function refreshThinkingLevel(ctx: ExtensionContext): void {
     cachedThinkingLevel = getThinkingLevel(ctx);
@@ -57,7 +66,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   function startBorderChase(): void {
-    if (!hasPromptUi) return;
+    if (!hasPromptUi || activeStyle !== "default") return;
 
     stopBorderChase(false);
     borderChaseActive = true;
@@ -78,15 +87,8 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.on("session_start", (_event, ctx) => {
-    refreshThinkingLevel(ctx);
-
-    if (ctx.mode !== "tui") {
-      hasPromptUi = false;
-      return;
-    }
-
-    hasPromptUi = true;
+  function applyDefaultStyle(ctx: ExtensionContext): void {
+    ctx.ui.setHeader(undefined);
     ctx.ui.setWorkingMessage();
     ctx.ui.setWorkingIndicator();
     ctx.ui.setWorkingVisible(false);
@@ -129,6 +131,78 @@ export default function (pi: ExtensionAPI) {
         },
       };
     });
+  }
+
+  function applyAmpStyle(ctx: ExtensionContext): void {
+    stopBorderChase(false);
+    projectRefresh.stop();
+    features.sessionShutdown(ctx);
+    requestFooterRender = undefined;
+
+    ctx.ui.setHeader(() => new EmptyComponent());
+    ctx.ui.setWorkingMessage();
+    ctx.ui.setWorkingIndicator();
+    ctx.ui.setWorkingVisible(true);
+
+    ctx.ui.setEditorComponent((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
+      activeTui = tui;
+      return new AmpInputEditor(
+        tui,
+        theme,
+        keybindings,
+        ctx,
+        () => cachedThinkingLevel ?? getThinkingLevel(ctx),
+        ctx.ui.theme,
+      );
+    });
+
+    ctx.ui.setFooter(() => new EmptyComponent());
+  }
+
+  function applyInputStyle(ctx: ExtensionContext, style: InputStyle): void {
+    activeStyle = style;
+    if (style === "default") applyDefaultStyle(ctx);
+    else applyAmpStyle(ctx);
+    requestUiRender();
+  }
+
+  pi.registerCommand("input-style", {
+    description: "Select pi-input-3000 input style",
+    handler: async (_args, ctx) => {
+      if (ctx.mode !== "tui") {
+        ctx.ui.notify("/input-style requires TUI mode", "error");
+        return;
+      }
+
+      const selected = await showInputStyleMenu(ctx, activeStyle);
+      if (!selected) return;
+
+      try {
+        saveInputStyleConfig({ style: selected });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        ctx.ui.notify(`Failed to save input style: ${message}`, "error");
+        return;
+      }
+
+      applyInputStyle(ctx, selected);
+      ctx.ui.notify(
+        `Input style: ${selected === "amp" ? "Amp-inspired" : "Default"}`,
+        "info",
+      );
+    },
+  });
+
+  pi.on("session_start", (_event, ctx) => {
+    refreshThinkingLevel(ctx);
+
+    if (ctx.mode !== "tui") {
+      hasPromptUi = false;
+      return;
+    }
+
+    hasPromptUi = true;
+    applyInputStyle(ctx, loadInputStyleConfig().style);
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
@@ -142,6 +216,8 @@ export default function (pi: ExtensionAPI) {
     cachedThinkingLevel = undefined;
 
     if (ctx.mode !== "tui") return;
+    ctx.ui.setHeader(undefined);
+    ctx.ui.setFooter(undefined);
     ctx.ui.setWorkingMessage();
     ctx.ui.setWorkingIndicator();
     ctx.ui.setWorkingVisible(true);
@@ -163,7 +239,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("turn_end", (_event, ctx) => {
     workingMessage = undefined;
     refreshThinkingLevel(ctx);
-    projectRefresh.schedule();
+    if (activeStyle === "default") projectRefresh.schedule();
     requestUiRender();
   });
 
@@ -182,7 +258,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("model_select", (_event, ctx) => {
-    features.modelSelect(ctx);
+    if (activeStyle === "default") features.modelSelect(ctx);
     refreshThinkingLevel(ctx);
     requestUiRender();
   });

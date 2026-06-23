@@ -25,7 +25,7 @@ const METADATA_SCORE = {
   contextText: 8,
   contextLabel: 4,
   hidden: 0,
-} as const;
+};
 
 export function renderEditorMetadata(
   meta: EditorMeta,

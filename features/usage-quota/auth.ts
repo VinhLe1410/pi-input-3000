@@ -6,14 +6,6 @@ import { CODEX_PROVIDER_KEY, type CodexQuotaCredentials } from "./types";
 
 type UnknownRecord = Record<string, unknown>;
 
-interface CodexAuthFile {
-  OPENAI_API_KEY?: string;
-  tokens?: {
-    access_token?: string;
-    account_id?: string;
-  };
-}
-
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null;
 }
@@ -21,6 +13,24 @@ function isRecord(value: unknown): value is UnknownRecord {
 function stringField(record: UnknownRecord, key: string): string | undefined {
   const value = record[key];
   return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function codexCredentialsFromAuthFile(data: unknown): CodexQuotaCredentials | undefined {
+  if (!isRecord(data)) return undefined;
+
+  const apiKey = stringField(data, "OPENAI_API_KEY");
+  if (apiKey) return { token: apiKey };
+
+  const tokens = data.tokens;
+  if (!isRecord(tokens)) return undefined;
+
+  const accessToken = stringField(tokens, "access_token");
+  if (!accessToken) return undefined;
+
+  return {
+    token: accessToken,
+    accountId: stringField(tokens, "account_id"),
+  };
 }
 
 function accountIdFromPiAuth(ctx: ExtensionContext): string | undefined {
@@ -37,14 +47,8 @@ async function readCodexAuthFile(): Promise<CodexQuotaCredentials | undefined> {
   );
 
   try {
-    const data = JSON.parse(await readFile(codexPath, "utf-8")) as CodexAuthFile;
-    if (data.OPENAI_API_KEY) return { token: data.OPENAI_API_KEY };
-    if (data.tokens?.access_token) {
-      return {
-        token: data.tokens.access_token,
-        accountId: data.tokens.account_id,
-      };
-    }
+    const data: unknown = JSON.parse(await readFile(codexPath, "utf-8"));
+    return codexCredentialsFromAuthFile(data);
   } catch {}
 
   return undefined;
