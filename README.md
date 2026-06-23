@@ -11,6 +11,6 @@ https://github.com/user-attachments/assets/26a42a07-b4f0-4419-ac40-c9c7be68c181
 3. **LESS BIG FEATURE:** Proper badges for displaying model, thinking effort, and usage quota (props to [this Pi Coding Agent post](https://www.reddit.com/r/PiCodingAgent/comments/1tyys3b/this_ones_mine/), made by u/monoceros-rex)
 4. **LESS BIG FEATURE:** Codex usage quota, easily removable by deleting [`features/usage-quota/`](features/usage-quota/) and remove import in [`index.ts`](index.ts)
 5. **LESS BIG FEATURE:** `/input-style` toggles between the default UI and a minimalist Amp-inspired input UI. The choice is saved to `~/.pi/agent/pi-input-3000.json`.
-6. **EXPERIMENTAL:** Sticky terminal split keeps the input/editor/footer pinned while chat history scrolls with mouse wheel, Page Up/Down, `super+up`, and `super+down`.
+6. **EXPERIMENTAL:** Sticky terminal split keeps the input/editor/footer pinned while chat history scrolls with mouse wheel and Page Up/Down.
 
 **How to use:** Clone to `~/.pi/agent/extensions/`, `pnpm install` (moreso for development than for actually using it), then enjoy.

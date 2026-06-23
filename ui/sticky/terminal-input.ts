@@ -1,10 +1,4 @@
-import { isKeyRelease, matchesKey, type KeyId } from "@earendil-works/pi-tui";
-import { matchesConfiguredShortcut } from "./shortcuts";
-
-export interface KeyboardScrollShortcuts {
-  up: KeyId;
-  down: KeyId;
-}
+import { isKeyRelease, matchesKey } from "@earendil-works/pi-tui";
 
 export interface SgrMousePacket {
   code: number;
@@ -13,29 +7,10 @@ export interface SgrMousePacket {
   final: "M" | "m";
 }
 
-export const DEFAULT_KEYBOARD_SCROLL_SHORTCUTS: KeyboardScrollShortcuts = {
-  up: "super+up",
-  down: "super+down",
-};
-
-export function parseKeyboardScrollDelta(
-  data: string,
-  shortcuts: KeyboardScrollShortcuts = DEFAULT_KEYBOARD_SCROLL_SHORTCUTS,
-): number {
+export function parseKeyboardScrollDelta(data: string): number {
   if (isKeyRelease(data)) return 0;
-
-  if (
-    matchesConfiguredShortcut(data, shortcuts.up)
-    || matchesKey(data, "pageUp")
-    || matchesKey(data, "ctrl+shift+up")
-    || /^\x1b\[(?:5;9(?::[12])?~|1;6(?::[12])?A|57421;9(?::[12])?u|57419;6(?::[12])?u)$/.test(data)
-  ) return 10;
-  if (
-    matchesConfiguredShortcut(data, shortcuts.down)
-    || matchesKey(data, "pageDown")
-    || matchesKey(data, "ctrl+shift+down")
-    || /^\x1b\[(?:6;9(?::[12])?~|1;6(?::[12])?B|57422;9(?::[12])?u|57420;6(?::[12])?u)$/.test(data)
-  ) return -10;
+  if (matchesKey(data, "pageUp")) return 10;
+  if (matchesKey(data, "pageDown")) return -10;
   return 0;
 }
 
@@ -65,8 +40,8 @@ function mouseBaseButton(code: number): number {
 export function mouseScrollDelta(packet: SgrMousePacket): number {
   if (packet.final !== "M") return 0;
   const baseButton = mouseBaseButton(packet.code);
-  if (baseButton === 64) return 3;
-  if (baseButton === 65) return -3;
+  if (baseButton === 64) return 1;
+  if (baseButton === 65) return -1;
   return 0;
 }
 

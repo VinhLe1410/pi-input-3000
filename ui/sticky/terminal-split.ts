@@ -22,7 +22,6 @@ import {
   type ExtendedKeyboardMode,
 } from "./ansi";
 import {
-  DEFAULT_KEYBOARD_SCROLL_SHORTCUTS,
   isLeftDrag,
   isLeftPress,
   isMouseRelease,
@@ -30,7 +29,6 @@ import {
   mouseScrollDelta,
   parseKeyboardScrollDelta,
   parseSgrMousePackets,
-  type KeyboardScrollShortcuts,
   type SgrMousePacket,
 } from "./terminal-input";
 import type { FixedEditorClusterRender } from "./cluster.ts";
@@ -59,7 +57,6 @@ interface TerminalSplitCompositorOptions {
   adapter: PiTuiAdapter;
   renderCluster: (width: number, terminalRows: number) => FixedEditorClusterRender;
   mouseScroll?: boolean;
-  keyboardScrollShortcuts?: KeyboardScrollShortcuts;
   onCopySelection?: (text: string) => void;
 }
 
@@ -122,7 +119,6 @@ export class TerminalSplitCompositor {
   private readonly terminal: Terminal;
   private readonly renderCluster: (width: number, terminalRows: number) => FixedEditorClusterRender;
   private readonly mouseScroll: boolean;
-  private readonly keyboardScrollShortcuts: KeyboardScrollShortcuts;
   private readonly onCopySelection: ((text: string) => void) | null;
   private extendedKeyboardMode: ExtendedKeyboardMode | null = null;
   private emergencyCleanup: (() => void) | null = null;
@@ -150,7 +146,6 @@ export class TerminalSplitCompositor {
     this.terminal = options.adapter.terminal;
     this.renderCluster = options.renderCluster;
     this.mouseScroll = options.mouseScroll !== false;
-    this.keyboardScrollShortcuts = options.keyboardScrollShortcuts ?? DEFAULT_KEYBOARD_SCROLL_SHORTCUTS;
     this.onCopySelection = options.onCopySelection ?? null;
   }
 
@@ -325,7 +320,7 @@ export class TerminalSplitCompositor {
       return { consume: true };
     }
 
-    const keyboardDelta = parseKeyboardScrollDelta(data, this.keyboardScrollShortcuts);
+    const keyboardDelta = parseKeyboardScrollDelta(data);
     if (keyboardDelta === 0) return undefined;
 
     this.scrollBy(keyboardDelta);
