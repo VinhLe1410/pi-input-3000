@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/consistent-type-assertions */
-
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import {
   beginSynchronizedOutput,
@@ -34,6 +32,19 @@ import {
   type SgrMousePacket,
 } from "./terminal-input";
 import type { FixedEditorClusterRender } from "./cluster.ts";
+import { PiTuiAdapter, type PatchedRenderable } from "./pi-tui-adapter";
+import { StickyScrollModel, type JumpDirection } from "./scroll-model";
+import {
+  isLocationInsideSelection,
+  renderSelectionHighlight as renderSelectedLine,
+  selectedText,
+  stripAnsi,
+  type SelectionArea,
+  type SelectionLocation,
+  type SelectionPoint,
+  type SelectionSnapshot,
+} from "./selection-model";
+import type { TerminalLike } from "./types";
 
 export {
   beginSynchronizedOutput,
@@ -44,56 +55,18 @@ export {
   setScrollRegion,
 } from "./ansi";
 
-export interface TerminalLike {
-  columns: number;
-  rows: number;
-  kittyProtocolActive?: boolean;
-  write(data: string): void;
-}
-
 interface TerminalSplitCompositorOptions {
-  tui: any;
-  terminal: TerminalLike;
+  adapter: PiTuiAdapter;
   renderCluster: (width: number, terminalRows: number) => FixedEditorClusterRender;
-  getShowHardwareCursor?: () => boolean;
   mouseScroll?: boolean;
   keyboardScrollShortcuts?: KeyboardScrollShortcuts;
   onCopySelection?: (text: string) => void;
-}
-
-interface PatchedRenderable {
-  render(width: number): string[];
-}
-
-interface RenderPatch {
-  target: PatchedRenderable;
-  originalRender: (width: number) => string[];
 }
 
 interface RenderPassCluster {
   width: number;
   terminalRows: number;
   cluster: FixedEditorClusterRender;
-}
-
-type CompositeLineAt = (
-  baseLine: string,
-  overlayLine: string,
-  startCol: number,
-  overlayWidth: number,
-  totalWidth: number,
-) => string;
-
-interface SelectionPoint {
-  line: number;
-  col: number;
-}
-
-type SelectionArea = "root" | "cluster";
-
-interface SelectionLocation {
-  area: SelectionArea;
-  point: SelectionPoint;
 }
 
 interface DisposeOptions {
@@ -107,55 +80,6 @@ const DOUBLE_CLICK_MS = 500;
 
 function stripOscSequences(line: string): string {
   return line.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "");
-}
-
-function stripAnsi(line: string): string {
-  return stripOscSequences(line).replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
-}
-
-const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-
-function sliceColumns(text: string, startCol: number, endCol: number): string {
-  let col = 0;
-  let result = "";
-  for (const { segment } of graphemeSegmenter.segment(text)) {
-    const width = Math.max(0, visibleWidth(segment));
-    if (col >= startCol && col < endCol) {
-      result += segment;
-    }
-    col += width;
-  }
-  return result;
-}
-
-function compareSelectionPoints(a: SelectionPoint, b: SelectionPoint): number {
-  return a.line === b.line ? a.col - b.col : a.line - b.line;
-}
-
-function descriptorForRows(terminal: TerminalLike): PropertyDescriptor | undefined {
-  let target: object | null = terminal;
-  while (target) {
-    const descriptor = Object.getOwnPropertyDescriptor(target, "rows");
-    if (descriptor) return descriptor;
-    target = Object.getPrototypeOf(target);
-  }
-
-  return undefined;
-}
-
-function readRows(terminal: TerminalLike, descriptor: PropertyDescriptor | undefined): number {
-  if (descriptor?.get) {
-    const value = descriptor.get.call(terminal);
-    return typeof value === "number" && Number.isFinite(value) ? value : 24;
-  }
-
-  if (descriptor && "value" in descriptor) {
-    const value = descriptor.value;
-    return typeof value === "number" && Number.isFinite(value) ? value : 24;
-  }
-
-  const value = Reflect.get(terminal, "rows");
-  return typeof value === "number" && Number.isFinite(value) ? value : 24;
 }
 
 function sanitizeLine(line: string, width: number): string {
@@ -198,21 +122,13 @@ export function buildFixedClusterPaint(
 }
 
 export class TerminalSplitCompositor {
-  private readonly tui: any;
+  private readonly adapter: PiTuiAdapter;
   private readonly terminal: TerminalLike;
   private readonly renderCluster: (width: number, terminalRows: number) => FixedEditorClusterRender;
-  private readonly getShowHardwareCursor: () => boolean;
   private readonly mouseScroll: boolean;
   private readonly keyboardScrollShortcuts: KeyboardScrollShortcuts;
   private readonly onCopySelection: ((text: string) => void) | null;
   private extendedKeyboardMode: ExtendedKeyboardMode | null = null;
-  private readonly rowsDescriptor: PropertyDescriptor | undefined;
-  private readonly originalWrite: (data: string) => void;
-  private readonly originalDoRender: (() => void) | null;
-  private readonly originalRender: ((width: number) => string[]) | null;
-  private originalCompositeLineAt: CompositeLineAt | null = null;
-  private readonly patchedRenders: RenderPatch[] = [];
-  private removeInputListener: (() => void) | null = null;
   private emergencyCleanup: (() => void) | null = null;
   private mouseReportingResumeTimer: ReturnType<typeof setTimeout> | null = null;
   private clipboardRestoreTimer: ReturnType<typeof setTimeout> | null = null;
@@ -224,13 +140,7 @@ export class TerminalSplitCompositor {
   private renderingCluster = false;
   private renderingScrollableRoot = false;
   private checkingOverlay = false;
-  private scrollOffset = 0;
-  private maxScrollOffset = 0;
-  private lastRootLineCount = 0;
-  private rootLines: string[] = [];
-  private visibleRootStart = 0;
-  private visibleScrollableRows = 0;
-  private visibleRootLines: string[] = [];
+  private readonly scroll = new StickyScrollModel();
   private visibleClusterLines: string[] = [];
   private selectionArea: SelectionArea | null = null;
   private selectionAnchor: SelectionPoint | null = null;
@@ -240,17 +150,12 @@ export class TerminalSplitCompositor {
   private lastLeftPress: { area: SelectionArea; line: number; at: number } | null = null;
 
   constructor(options: TerminalSplitCompositorOptions) {
-    this.tui = options.tui;
-    this.terminal = options.terminal;
+    this.adapter = options.adapter;
+    this.terminal = options.adapter.terminal;
     this.renderCluster = options.renderCluster;
-    this.getShowHardwareCursor = options.getShowHardwareCursor ?? (() => false);
     this.mouseScroll = options.mouseScroll !== false;
     this.keyboardScrollShortcuts = options.keyboardScrollShortcuts ?? DEFAULT_KEYBOARD_SCROLL_SHORTCUTS;
     this.onCopySelection = options.onCopySelection ?? null;
-    this.rowsDescriptor = descriptorForRows(options.terminal);
-    this.originalWrite = options.terminal.write.bind(options.terminal);
-    this.originalDoRender = typeof options.tui.doRender === "function" ? options.tui.doRender.bind(options.tui) : null;
-    this.originalRender = typeof options.tui.render === "function" ? options.tui.render.bind(options.tui) : null;
   }
 
   install(): void {
@@ -259,14 +164,6 @@ export class TerminalSplitCompositor {
       throw new Error("[powerline-footer] Fixed editor compositor expected terminal.write(data) to exist");
     }
 
-    this.originalWrite(
-      beginSynchronizedOutput()
-      + enterAlternateScreen()
-      + this.enableAlternateScreenKeyboardMode()
-      + disableAlternateScrollMode()
-      + (this.mouseScroll ? enableMouseReporting() : "")
-      + endSynchronizedOutput(),
-    );
     this.emergencyCleanup = () => {
       if (!this.disposed) {
         this.restoreTerminalStateForExit();
@@ -274,63 +171,38 @@ export class TerminalSplitCompositor {
     };
     process.once("exit", this.emergencyCleanup);
 
-    Object.defineProperty(this.terminal, "rows", {
-      configurable: true,
-      get: () => this.getScrollableRows(),
-    });
-
-    if (this.originalRender) {
-      this.tui.render = (width: number) => this.renderScrollableRoot(width);
-    }
-
-    if (typeof this.tui.addInputListener === "function") {
-      this.removeInputListener = this.tui.addInputListener((data: string) => this.handleInput(data));
-    }
-
-    this.terminal.write = (data: string) => this.write(data);
-    if (this.originalDoRender) {
-      this.tui.doRender = () => {
-        this.renderPassActive = true;
-        this.renderPassCluster = null;
-        try {
-          this.originalDoRender?.();
-          this.requestRepaint();
-        } finally {
-          this.renderPassActive = false;
-          this.renderPassCluster = null;
-        }
-      };
-    }
-    if (typeof this.tui.compositeLineAt === "function") {
-      this.originalCompositeLineAt = this.tui.compositeLineAt.bind(this.tui) as CompositeLineAt;
-      this.tui.compositeLineAt = (
-        baseLine: string,
-        overlayLine: string,
-        startCol: number,
-        overlayWidth: number,
-        totalWidth: number,
-      ) => this.originalCompositeLineAt?.(
-        normalizeOverlayCompositionLine(baseLine),
-        normalizeOverlayCompositionLine(overlayLine),
-        startCol,
-        overlayWidth,
-        totalWidth,
-      ) ?? "";
+    try {
+      this.adapter.install({
+        getRows: () => this.getScrollableRows(),
+        renderRoot: (width: number) => this.renderScrollableRoot(width),
+        handleInput: (data: string) => this.handleInput(data),
+        write: (data: string) => this.write(data),
+        renderPass: (renderOriginal) => this.renderRootPass(renderOriginal),
+        normalizeCompositeLine: normalizeOverlayCompositionLine,
+      });
+      this.adapter.writeRaw(
+        beginSynchronizedOutput()
+        + enterAlternateScreen()
+        + this.enableAlternateScreenKeyboardMode()
+        + disableAlternateScrollMode()
+        + (this.mouseScroll ? enableMouseReporting() : "")
+        + endSynchronizedOutput(),
+      );
+    } catch (error: unknown) {
+      process.removeListener("exit", this.emergencyCleanup);
+      this.emergencyCleanup = null;
+      this.adapter.restore();
+      throw error;
     }
     this.installed = true;
   }
 
   hideRenderable(target: PatchedRenderable): void {
-    if (this.patchedRenders.some((patch) => patch.target === target)) return;
-    const originalRender = target.render.bind(target);
-    this.patchedRenders.push({ target, originalRender });
-    target.render = () => [];
+    this.adapter.hideRenderable(target);
   }
 
   renderHidden(target: PatchedRenderable, width: number): string[] {
-    const patch = this.patchedRenders.find((candidate) => candidate.target === target);
-    const render = patch?.originalRender ?? target.render.bind(target);
-    return render(width);
+    return this.adapter.renderHidden(target, width);
   }
 
   jumpToPreviousRootTarget(targetLines: readonly number[]): boolean {
@@ -342,38 +214,23 @@ export class TerminalSplitCompositor {
   }
 
   jumpToRootBottom(): boolean {
-    if (this.disposed || this.hasVisibleOverlay() || this.scrollOffset === 0) return false;
+    if (this.disposed || this.hasVisibleOverlay() || this.scroll.offset === 0) return false;
 
     this.clearSelection();
     this.lastLeftPress = null;
-    this.scrollOffset = 0;
+    this.scroll.jumpToBottom();
     this.requestRender();
     return true;
   }
 
-  private jumpToRootTarget(targetLines: readonly number[], direction: "previous" | "next"): boolean {
+  private jumpToRootTarget(targetLines: readonly number[], direction: JumpDirection): boolean {
     if (this.disposed || targetLines.length === 0 || this.hasVisibleOverlay()) return false;
 
-    const start = this.visibleRootStart;
-    const candidates = direction === "previous"
-      ? targetLines.filter((line) => line < start).sort((a, b) => b - a)
-      : targetLines.filter((line) => line > start).sort((a, b) => a - b);
-
-    for (const target of candidates) {
-      const nextOffset = Math.max(0, Math.min(
-        this.lastRootLineCount - Math.max(1, this.visibleScrollableRows) - target,
-        this.maxScrollOffset,
-      ));
-      if (nextOffset === this.scrollOffset) continue;
-
-      this.clearSelection();
-      this.lastLeftPress = null;
-      this.scrollOffset = nextOffset;
-      this.requestRender();
-      return true;
-    }
-
-    return false;
+    if (!this.scroll.jumpToTarget(targetLines, direction)) return false;
+    this.clearSelection();
+    this.lastLeftPress = null;
+    this.requestRender();
+    return true;
   }
 
   requestRepaint(): void {
@@ -383,9 +240,9 @@ export class TerminalSplitCompositor {
     const cluster = this.getCluster(width, rawRows);
     if (cluster.lines.length === 0) return;
 
-    this.originalWrite(
+    this.adapter.writeRaw(
       beginSynchronizedOutput()
-      + buildFixedClusterPaint(this.decorateCluster(cluster), rawRows, width, this.getShowHardwareCursor())
+      + buildFixedClusterPaint(this.decorateCluster(cluster), rawRows, width, this.adapter.getShowHardwareCursor())
       + endSynchronizedOutput(),
     );
   }
@@ -394,12 +251,6 @@ export class TerminalSplitCompositor {
     if (this.disposed) return;
     this.disposed = true;
 
-    for (const patch of this.patchedRenders.splice(0)) {
-      patch.target.render = patch.originalRender;
-    }
-
-    this.removeInputListener?.();
-    this.removeInputListener = null;
     if (this.emergencyCleanup) {
       process.removeListener("exit", this.emergencyCleanup);
       this.emergencyCleanup = null;
@@ -413,28 +264,12 @@ export class TerminalSplitCompositor {
       this.clipboardRestoreTimer = null;
     }
 
-    this.terminal.write = this.originalWrite;
-    if (this.originalDoRender) {
-      this.tui.doRender = this.originalDoRender;
-    }
-    if (this.originalRender) {
-      this.tui.render = this.originalRender;
-    }
-    if (this.originalCompositeLineAt) {
-      this.tui.compositeLineAt = this.originalCompositeLineAt;
-      this.originalCompositeLineAt = null;
-    }
-    if (this.rowsDescriptor) {
-      Object.defineProperty(this.terminal, "rows", this.rowsDescriptor);
-    } else {
-      Reflect.deleteProperty(this.terminal, "rows");
-    }
-
+    this.adapter.restore();
     this.restoreTerminalState(options);
   }
 
   private getRawRows(): number {
-    return Math.max(2, readRows(this.terminal, this.rowsDescriptor));
+    return Math.max(2, this.adapter.readRawRows());
   }
 
   private getScrollableRows(): number {
@@ -449,12 +284,12 @@ export class TerminalSplitCompositor {
   }
 
   private renderScrollableRoot(width: number): string[] {
-    if (!this.originalRender || this.disposed || this.renderingScrollableRoot) {
-      return this.originalRender?.(width) ?? [];
+    if (!this.adapter.hasRootRender() || this.disposed || this.renderingScrollableRoot) {
+      return this.adapter.renderRoot(width);
     }
 
     if (this.hasVisibleOverlay()) {
-      return this.originalRender(width).map((line) => sanitizeOverlayBaseLine(line, Math.max(1, width)));
+      return this.adapter.renderRoot(width).map((line) => sanitizeOverlayBaseLine(line, Math.max(1, width)));
     }
 
     this.renderingScrollableRoot = true;
@@ -463,19 +298,23 @@ export class TerminalSplitCompositor {
       const renderWidth = Math.max(1, width);
       const cluster = this.getCluster(renderWidth, rawRows);
       const scrollableRows = Math.max(1, rawRows - cluster.lines.length);
-      const lines = this.originalRender(renderWidth);
-      this.rootLines = lines;
-      if (this.scrollOffset > 0 && this.lastRootLineCount > 0 && lines.length > this.lastRootLineCount) {
-        this.scrollOffset += lines.length - this.lastRootLineCount;
-      }
-      this.lastRootLineCount = lines.length;
-      this.maxScrollOffset = Math.max(0, lines.length - scrollableRows);
-      this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, this.maxScrollOffset));
-
-      const start = this.updateVisibleRootWindow(scrollableRows);
-      return this.visibleRootLines.map((line, index) => this.renderSelectionHighlight(line, start + index, "root"));
+      const lines = this.adapter.renderRoot(renderWidth);
+      const start = this.scroll.updateRootWindow(lines, scrollableRows);
+      return this.scroll.visibleRootLines.map((line, index) => this.renderSelectionHighlight(line, start + index, "root"));
     } finally {
       this.renderingScrollableRoot = false;
+    }
+  }
+
+  private renderRootPass(renderOriginal: () => void): void {
+    this.renderPassActive = true;
+    this.renderPassCluster = null;
+    try {
+      renderOriginal();
+      this.requestRepaint();
+    } finally {
+      this.renderPassActive = false;
+      this.renderPassCluster = null;
     }
   }
 
@@ -546,20 +385,6 @@ export class TerminalSplitCompositor {
     }
   }
 
-  private updateVisibleRootWindow(scrollableRows = this.visibleScrollableRows): number {
-    const rows = Math.max(1, scrollableRows);
-    const start = Math.max(0, this.rootLines.length - rows - this.scrollOffset);
-    const visibleLines = this.rootLines.slice(start, start + rows);
-    while (visibleLines.length < rows) {
-      visibleLines.push("");
-    }
-
-    this.visibleRootStart = start;
-    this.visibleScrollableRows = rows;
-    this.visibleRootLines = visibleLines;
-    return start;
-  }
-
   private finishSelection(packet: SgrMousePacket, location: SelectionLocation | null): void {
     if (!this.preserveSelectionFocusOnRelease) {
       this.selectionFocus = location?.area === this.selectionArea
@@ -611,14 +436,14 @@ export class TerminalSplitCompositor {
     if (packet.row < 1) return null;
 
     const col = Math.max(0, packet.col - 1);
-    if (packet.row <= this.visibleScrollableRows) {
+    if (packet.row <= this.scroll.visibleScrollableRows) {
       return {
         area: "root",
-        point: { line: this.visibleRootStart + packet.row - 1, col },
+        point: { line: this.scroll.visibleRootStart + packet.row - 1, col },
       };
     }
 
-    const clusterLine = packet.row - this.visibleScrollableRows - 1;
+    const clusterLine = packet.row - this.scroll.visibleScrollableRows - 1;
     if (clusterLine >= this.visibleClusterLines.length) return null;
 
     return {
@@ -630,17 +455,14 @@ export class TerminalSplitCompositor {
   private scrollSelectionAtViewportEdge(packet: SgrMousePacket): boolean {
     if (!this.selectionDragging || this.selectionArea !== "root" || !isLeftDrag(packet)) return false;
 
-    const delta = packet.row <= 1 ? 1 : packet.row >= this.visibleScrollableRows ? -1 : 0;
+    const delta = packet.row <= 1 ? 1 : packet.row >= this.scroll.visibleScrollableRows ? -1 : 0;
     if (delta === 0) return false;
 
-    const nextOffset = Math.max(0, Math.min(this.scrollOffset + delta, this.maxScrollOffset));
-    if (nextOffset === this.scrollOffset) return false;
+    const edgeLine = this.scroll.scrollSelectionAtEdge(delta);
+    if (edgeLine === null) return false;
 
     this.lastLeftPress = null;
     this.preserveSelectionFocusOnRelease = true;
-    this.scrollOffset = nextOffset;
-    const start = this.updateVisibleRootWindow();
-    const edgeLine = delta > 0 ? start : start + Math.max(0, this.visibleScrollableRows - 1);
     this.selectionFocus = {
       line: edgeLine,
       col: Math.max(0, packet.col - 1),
@@ -652,95 +474,55 @@ export class TerminalSplitCompositor {
   private clampedSelectionPointForPacket(packet: SgrMousePacket, area: SelectionArea | null): SelectionPoint {
     if (area === "cluster") {
       return {
-        line: Math.max(0, Math.min(packet.row - this.visibleScrollableRows - 1, this.visibleClusterLines.length - 1)),
+        line: Math.max(0, Math.min(packet.row - this.scroll.visibleScrollableRows - 1, this.visibleClusterLines.length - 1)),
         col: Math.max(0, packet.col - 1),
       };
     }
 
-    const row = Math.max(1, Math.min(packet.row, this.visibleScrollableRows));
+    const row = Math.max(1, Math.min(packet.row, this.scroll.visibleScrollableRows));
     return {
-      line: this.visibleRootStart + row - 1,
+      line: this.scroll.visibleRootStart + row - 1,
       col: Math.max(0, packet.col - 1),
     };
   }
 
   private renderSelectionHighlight(line: string, lineIndex: number, area: SelectionArea): string {
-    const range = this.getSelectionRangeForLine(lineIndex, area);
-    if (!range) return line;
-
-    const plain = stripAnsi(line);
-    const startCol = Math.max(0, Math.min(range.startCol, visibleWidth(plain)));
-    const endCol = Math.max(startCol, Math.min(range.endCol, visibleWidth(plain)));
-    if (startCol === endCol) return line;
-
-    const before = sliceColumns(plain, 0, startCol);
-    const selected = sliceColumns(plain, startCol, endCol);
-    const after = sliceColumns(plain, endCol, Number.POSITIVE_INFINITY);
-    return `${before}\x1b[7m${selected}\x1b[27m${after}`;
+    return renderSelectedLine(line, lineIndex, area, this.selectionSnapshot());
   }
 
   private selectionLineWidth(area: SelectionArea, lineIndex: number): number {
-    const lines = area === "root" ? this.visibleRootLines : this.visibleClusterLines;
-    const firstLine = area === "root" ? this.visibleRootStart : 0;
+    const lines = area === "root" ? this.scroll.visibleRootLines : this.visibleClusterLines;
+    const firstLine = area === "root" ? this.scroll.visibleRootStart : 0;
     return visibleWidth(stripAnsi(lines[lineIndex - firstLine] ?? ""));
   }
 
   private getSelectedText(): string {
-    if (!this.selectionArea || !this.selectionAnchor || !this.selectionFocus) return "";
-
-    const start = compareSelectionPoints(this.selectionAnchor, this.selectionFocus) <= 0
-      ? this.selectionAnchor
-      : this.selectionFocus;
-    const end = start === this.selectionAnchor ? this.selectionFocus : this.selectionAnchor;
-    if (start.line === end.line && start.col === end.col) return "";
-
-    const lines = this.selectionArea === "root" ? this.rootLines : this.visibleClusterLines;
-    const selected: string[] = [];
-    for (let lineIndex = start.line; lineIndex <= end.line; lineIndex++) {
-      const line = stripAnsi(lines[lineIndex] ?? "");
-      const startCol = lineIndex === start.line ? start.col : 0;
-      const endCol = lineIndex === end.line ? end.col : Number.POSITIVE_INFINITY;
-      selected.push(sliceColumns(line, startCol, endCol));
-    }
-
-    return selected.join("\n").replace(/[ \t]+$/gm, "").trimEnd();
+    const lines = this.selectionArea === "root" ? this.scroll.rootLines : this.visibleClusterLines;
+    return selectedText(this.selectionSnapshot(), lines);
   }
 
-  private getSelectionRangeForLine(lineIndex: number, area: SelectionArea): { startCol: number; endCol: number } | null {
-    if (this.selectionArea !== area || !this.selectionAnchor || !this.selectionFocus) return null;
-
-    const start = compareSelectionPoints(this.selectionAnchor, this.selectionFocus) <= 0
-      ? this.selectionAnchor
-      : this.selectionFocus;
-    const end = start === this.selectionAnchor ? this.selectionFocus : this.selectionAnchor;
-    if (lineIndex < start.line || lineIndex > end.line) return null;
-
+  private selectionSnapshot(): SelectionSnapshot {
     return {
-      startCol: lineIndex === start.line ? start.col : 0,
-      endCol: lineIndex === end.line ? end.col : Number.POSITIVE_INFINITY,
+      area: this.selectionArea,
+      anchor: this.selectionAnchor,
+      focus: this.selectionFocus,
     };
   }
 
   private isLocationInsideSelection(location: SelectionLocation | null): boolean {
-    if (!location || location.area !== this.selectionArea) return false;
-    const range = this.getSelectionRangeForLine(location.point.line, location.area);
-    return Boolean(range && location.point.col >= range.startCol && location.point.col < range.endCol);
+    return isLocationInsideSelection(this.selectionSnapshot(), location);
   }
 
   private scrollBy(delta: number): void {
-    const nextOffset = Math.max(0, Math.min(this.scrollOffset + delta, this.maxScrollOffset));
-    if (nextOffset === this.scrollOffset) return;
+    if (!this.scroll.scrollBy(delta)) return;
 
     this.clearSelection();
     this.lastLeftPress = null;
-    this.scrollOffset = nextOffset;
     this.requestRender();
   }
 
   private requestRender(): void {
-    if (typeof this.tui.requestRender === "function") {
-      this.tui.requestRender();
-    }
+    this.adapter.requestRender();
   }
 
   private pauseMouseReportingForContextMenu(textToRestoreToClipboard: string | null = null): void {
@@ -752,11 +534,11 @@ export class TerminalSplitCompositor {
       this.clipboardRestoreTimer = null;
     }
 
-    this.originalWrite(beginSynchronizedOutput() + disableMouseReporting() + endSynchronizedOutput());
+    this.adapter.writeRaw(beginSynchronizedOutput() + disableMouseReporting() + endSynchronizedOutput());
     this.mouseReportingResumeTimer = setTimeout(() => {
       this.mouseReportingResumeTimer = null;
       if (!this.disposed) {
-        this.originalWrite(beginSynchronizedOutput() + enableMouseReporting() + endSynchronizedOutput());
+        this.adapter.writeRaw(beginSynchronizedOutput() + enableMouseReporting() + endSynchronizedOutput());
       }
     }, CONTEXT_MENU_MOUSE_REPORTING_PAUSE_MS);
 
@@ -799,9 +581,7 @@ export class TerminalSplitCompositor {
   }
 
   private activeExtendedKeyboardMode(): ExtendedKeyboardMode | null {
-    if (this.terminal.kittyProtocolActive === true) return "kitty";
-    if (Reflect.get(this.terminal, "_modifyOtherKeysActive") === true) return "modifyOtherKeys";
-    return null;
+    return this.adapter.activeExtendedKeyboardMode();
   }
 
   private enableAlternateScreenKeyboardMode(): string {
@@ -813,7 +593,7 @@ export class TerminalSplitCompositor {
     const activeMode = this.extendedKeyboardMode ?? this.activeExtendedKeyboardMode();
     const restoreMainScreenMode = !options.resetExtendedKeyboardModes && this.extendedKeyboardMode === null && activeMode !== null;
 
-    this.originalWrite(
+    this.adapter.writeRaw(
       beginSynchronizedOutput()
       + resetScrollRegion()
       + (this.mouseScroll ? disableMouseReporting() : "")
@@ -836,7 +616,7 @@ export class TerminalSplitCompositor {
 
   private write(data: string): void {
     if (this.disposed || this.writing || this.hasVisibleOverlay()) {
-      this.originalWrite(data);
+      this.adapter.writeRaw(data);
       return;
     }
 
@@ -848,26 +628,20 @@ export class TerminalSplitCompositor {
       const reservedRows = cluster.lines.length;
 
       if (reservedRows === 0 || rawRows <= 2) {
-        this.originalWrite(data);
+        this.adapter.writeRaw(data);
         return;
       }
 
       const scrollBottom = Math.max(1, rawRows - reservedRows);
-      const hardwareCursorRow = typeof this.tui.hardwareCursorRow === "number"
-        ? this.tui.hardwareCursorRow
-        : typeof this.tui.cursorRow === "number"
-          ? this.tui.cursorRow
-          : 0;
-      const viewportTop = typeof this.tui.previousViewportTop === "number" ? this.tui.previousViewportTop : 0;
-      const screenRow = Math.max(1, Math.min(scrollBottom, hardwareCursorRow - viewportTop + 1));
+      const screenRow = this.adapter.getCursorScreenRow(scrollBottom);
       const buffer = beginSynchronizedOutput()
         + setScrollRegion(1, scrollBottom)
         + moveCursor(screenRow, 1)
         + data
-        + buildFixedClusterPaint(this.decorateCluster(cluster), rawRows, width, this.getShowHardwareCursor())
+        + buildFixedClusterPaint(this.decorateCluster(cluster), rawRows, width, this.adapter.getShowHardwareCursor())
         + endSynchronizedOutput();
 
-      this.originalWrite(buffer);
+      this.adapter.writeRaw(buffer);
     } finally {
       this.writing = false;
     }
@@ -914,16 +688,7 @@ export class TerminalSplitCompositor {
 
     this.checkingOverlay = true;
     try {
-      if (typeof this.tui.hasOverlay === "function" && this.tui.hasOverlay()) {
-        return true;
-      }
-
-      const overlayStack = Reflect.get(this.tui, "overlayStack");
-      if (!Array.isArray(overlayStack)) {
-        return false;
-      }
-
-      return overlayStack.some((entry) => entry && entry.hidden !== true);
+      return this.adapter.hasVisibleOverlay();
     } finally {
       this.checkingOverlay = false;
     }

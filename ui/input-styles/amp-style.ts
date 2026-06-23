@@ -20,12 +20,6 @@ export const ampStyle: InputStyleAdapter = {
   description: "Minimal chrome: cost, thinking, context %, and cwd only",
 
   apply(ctx: ExtensionContext, runtime: InputStyleRuntime): void {
-    runtime.stopBorderChase(false);
-    runtime.setChaseEnabled(false);
-    runtime.projectRefresh.stop();
-    runtime.features.sessionShutdown(ctx);
-    runtime.registerFooterRender(undefined);
-
     ctx.ui.setHeader(() => new EmptyComponent());
     ctx.ui.setWorkingMessage();
     ctx.ui.setWorkingIndicator();

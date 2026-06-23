@@ -1,12 +1,8 @@
 import type { Component } from "@earendil-works/pi-tui";
+import { isRecord } from "../core/unknown-record";
 import type { EditorFrameParts } from "./editor-types";
 
-type UnknownRecord = Record<string, unknown>;
 type RenderableComponent = Pick<Component, "render">;
-
-function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === "object" && value !== null;
-}
 
 function isRenderableComponent(value: unknown): value is RenderableComponent {
   return isRecord(value) && typeof value.render === "function";

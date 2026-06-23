@@ -55,6 +55,8 @@ export function createProjectRefreshController(
 
   return {
     start(cwd: string): void {
+      if (activeCwd === cwd && refreshTimer) return;
+
       generation += 1;
       activeCwd = cwd;
       refreshInFlight = false;

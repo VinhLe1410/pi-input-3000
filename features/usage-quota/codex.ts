@@ -1,4 +1,5 @@
 import { clampPercent, formatResetTime, getWindowLabel } from "../../core/format";
+import { isRecord, numberField } from "../../core/unknown-record";
 import { fetchWithTimeout } from "./network";
 import { resolveCodexCredentials } from "./auth";
 import type { CodexQuotaWindow, QuotaState } from "./types";
@@ -15,17 +16,6 @@ interface CodexUsageResponse {
     primary_window?: CodexRateWindow;
     secondary_window?: CodexRateWindow;
   };
-}
-
-type UnknownRecord = Record<string, unknown>;
-
-function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === "object" && value !== null;
-}
-
-function numberField(record: UnknownRecord, key: string): number | undefined {
-  const value = record[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function codexRateWindowFromData(data: unknown): CodexRateWindow | undefined {
@@ -71,7 +61,10 @@ function codexWindow(
   };
 }
 
-export async function fetchCodexQuota(ctx: ExtensionContext): Promise<QuotaState> {
+export async function fetchCodexQuota(
+  ctx: ExtensionContext,
+  signal?: AbortSignal,
+): Promise<QuotaState> {
   const credentials = await resolveCodexCredentials(ctx);
   if (!credentials) return { kind: "no-auth" };
 
@@ -86,10 +79,15 @@ export async function fetchCodexQuota(ctx: ExtensionContext): Promise<QuotaState
       headers["ChatGPT-Account-Id"] = credentials.accountId;
     }
 
-    const res = await fetchWithTimeout("https://chatgpt.com/backend-api/wham/usage", {
-      method: "GET",
-      headers,
-    });
+    const res = await fetchWithTimeout(
+      "https://chatgpt.com/backend-api/wham/usage",
+      {
+        method: "GET",
+        headers,
+      },
+      undefined,
+      signal,
+    );
 
     if (!res.ok) return { kind: "error", error: `HTTP ${res.status}` };
 

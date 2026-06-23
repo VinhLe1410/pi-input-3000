@@ -32,6 +32,7 @@ export class PolishedInputFrameRenderer {
   private labelTheme: Theme;
   private defaultBorderColor: (text: string) => string;
   private activeBorderColor: (text: string) => string;
+  private activeBorderRgb: Rgb | undefined;
   private colorCache = new Map<ThemeColor, Rgb | undefined>();
 
   constructor(labelTheme: Theme, borderColor?: (text: string) => string) {
@@ -42,16 +43,18 @@ export class PolishedInputFrameRenderer {
 
   invalidate(): void {
     this.colorCache.clear();
+    this.activeBorderRgb = undefined;
   }
 
   contentWidth(width: number): number {
-    const railWidth = visibleWidth(this.renderRail());
-    const rightRailWidth = visibleWidth(this.renderRightRail());
+    const railWidth = visibleWidth(`${EDITOR_CHROME.railCell}${EDITOR_LAYOUT.railGap}`);
+    const rightRailWidth = visibleWidth(`${EDITOR_LAYOUT.rightRailGap}${EDITOR_CHROME.railCell}`);
     return Math.max(1, width - railWidth - rightRailWidth);
   }
 
   render(frame: PolishedInputFrame): string[] {
     this.activeBorderColor = this.frameBorderColor(frame.thinkingLevel);
+    this.activeBorderRgb = parseAnsiRgb(this.activeBorderColor(" "));
     const width = Math.max(0, frame.width);
     const innerWidth = this.contentWidth(width);
     const contentLines = [
@@ -234,7 +237,7 @@ export class PolishedInputFrameRenderer {
   }
 
   private currentBorderRgb(): Rgb | undefined {
-    return parseAnsiRgb(this.activeBorderColor(" "));
+    return this.activeBorderRgb;
   }
 
   private renderBorderCell(

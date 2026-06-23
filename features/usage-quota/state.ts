@@ -17,18 +17,64 @@ function isCodexContext(ctx: ExtensionContext): boolean {
   return ctx.model?.provider === CODEX_PROVIDER_KEY;
 }
 
+const IDLE_STATE: QuotaState = { kind: "idle" };
+const LOADING_STATE: QuotaState = { kind: "loading" };
+
+function sameWindows(
+  a: Extract<QuotaState, { kind: "success" | "stale" }>["windows"],
+  b: Extract<QuotaState, { kind: "success" | "stale" }>["windows"],
+): boolean {
+  return a.length === b.length && a.every((window, index) => {
+    const other = b[index];
+    return other !== undefined
+      && window.id === other.id
+      && window.label === other.label
+      && window.usedPercent === other.usedPercent
+      && window.resetsIn === other.resetsIn;
+  });
+}
+
+function sameVisibleState(a: QuotaState, b: QuotaState): boolean {
+  switch (a.kind) {
+    case "idle":
+    case "loading":
+    case "no-auth":
+      return a.kind === b.kind;
+    case "error":
+      return b.kind === "error" && a.error === b.error;
+    case "success":
+      return b.kind === "success" && sameWindows(a.windows, b.windows);
+    case "stale": {
+      return b.kind === "stale"
+        && a.error === b.error
+        && sameWindows(a.windows, b.windows);
+    }
+  }
+}
+
 export function createUsageQuotaState(options: UsageQuotaStateOptions): UsageQuotaState {
   let activeContext: ExtensionContext | undefined;
   let refreshTimer: ReturnType<typeof setInterval> | undefined;
   let requestVersion = 0;
-  let state: QuotaState = { kind: "idle" };
+  let activeRequest: AbortController | undefined;
+  let state: QuotaState = IDLE_STATE;
   let latestSuccess: Extract<QuotaState, { kind: "success" }> | undefined;
 
   function setState(next: QuotaState): void {
-    if (state === next) return;
+    if (sameVisibleState(state, next)) {
+      state = next;
+      if (next.kind === "success") latestSuccess = next;
+      return;
+    }
+
     state = next;
     if (next.kind === "success") latestSuccess = next;
     options.onChange();
+  }
+
+  function abortActiveRequest(): void {
+    activeRequest?.abort();
+    activeRequest = undefined;
   }
 
   function stopTimer(): void {
@@ -56,8 +102,13 @@ export function createUsageQuotaState(options: UsageQuotaStateOptions): UsageQuo
     if (!ctx || !isCodexContext(ctx)) return;
 
     const version = ++requestVersion;
-    void fetchCodexQuota(ctx).then((next) => {
+    abortActiveRequest();
+    const request = new AbortController();
+    activeRequest = request;
+
+    void fetchCodexQuota(ctx, request.signal).then((next) => {
       if (version !== requestVersion || activeContext !== ctx) return;
+      activeRequest = undefined;
       applyResolvedState(next);
     });
   }
@@ -70,17 +121,20 @@ export function createUsageQuotaState(options: UsageQuotaStateOptions): UsageQuo
 
   return {
     start(ctx: ExtensionContext): void {
+      if (activeContext === ctx && isCodexContext(ctx) && refreshTimer) return;
+
       requestVersion += 1;
       activeContext = ctx;
 
       if (!isCodexContext(ctx)) {
+        abortActiveRequest();
         stopTimer();
-        setState({ kind: "idle" });
+        setState(IDLE_STATE);
         return;
       }
 
       if (state.kind === "idle" || state.kind === "error" || state.kind === "no-auth") {
-        setState({ kind: "loading" });
+        setState(LOADING_STATE);
       }
 
       refresh();
@@ -89,8 +143,9 @@ export function createUsageQuotaState(options: UsageQuotaStateOptions): UsageQuo
     stop(): void {
       requestVersion += 1;
       activeContext = undefined;
+      abortActiveRequest();
       stopTimer();
-      setState({ kind: "idle" });
+      setState(IDLE_STATE);
     },
     current(): QuotaState {
       return state;

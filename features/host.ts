@@ -20,7 +20,11 @@ export function createFeatureHost(features: readonly ExtensionFeature[]): Featur
       for (const feature of features) feature.modelSelect?.(ctx);
     },
     footerRight(theme: Theme): string[] {
-      return features.flatMap((feature) => [...(feature.footerRight?.(theme) ?? [])]);
+      const segments: string[] = [];
+      for (const feature of features) {
+        segments.push(...(feature.footerRight?.(theme) ?? []));
+      }
+      return segments;
     },
   };
 }

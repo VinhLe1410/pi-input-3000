@@ -5,8 +5,7 @@ import type {
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
-import { splitRenderedEditor } from "../editor-autocomplete";
-import { clampRenderedLines } from "../rendering";
+import { renderFramedEditor } from "../framed-editor";
 import { AmpInputFrameRenderer } from "./frame";
 import {
   renderAmpBottomRightLabel,
@@ -35,28 +34,23 @@ export class AmpInputEditor extends CustomEditor {
   }
 
   render(width: number): string[] {
-    if (width <= 4) return clampRenderedLines(super.render(width), width);
-
-    const innerWidth = this.frameRenderer.contentWidth(width);
-    const rendered = super.render(innerWidth);
-    const { editorFrame, autocompleteLines } = splitRenderedEditor(
-      this,
-      rendered,
-      innerWidth,
-    );
-
-    if (editorFrame.length < 2) return clampRenderedLines(super.render(width), width);
-
-    return this.frameRenderer.render({
+    return renderFramedEditor({
+      editor: this,
       width,
-      editorLines: editorFrame.slice(1, -1),
-      topRightLabel: renderAmpTopRightLabel(
-        this.ctx,
-        this.getThinkingLevel(),
-        this.labelTheme,
-      ),
-      bottomRightLabel: renderAmpBottomRightLabel(this.ctx, this.labelTheme),
-      autocompleteLines,
+      minWidth: 4,
+      contentWidth: (frameWidth) => this.frameRenderer.contentWidth(frameWidth),
+      renderBase: (renderWidth) => super.render(renderWidth),
+      renderFrame: ({ editorFrame, autocompleteLines }) => this.frameRenderer.render({
+        width,
+        editorLines: editorFrame,
+        topRightLabel: renderAmpTopRightLabel(
+          this.ctx,
+          this.getThinkingLevel(),
+          this.labelTheme,
+        ),
+        bottomRightLabel: renderAmpBottomRightLabel(this.ctx, this.labelTheme),
+        autocompleteLines,
+      }),
     });
   }
 }

@@ -10,15 +10,20 @@ import {
 } from "../seams/project-refresh";
 import { BORDER_CHASE, BORDER_CHASE_FRAME_COUNT } from "./design-tokens";
 import { getThinkingLevel } from "./editor-meta";
-import type { InputStyleRuntime } from "./input-styles/types";
+import type {
+  InputStyleAdapter,
+  InputStyleCapabilities,
+  InputStyleRuntime,
+} from "./input-styles/types";
 
 export class InputStyleRuntimeController implements InputStyleRuntime {
-  readonly git: GitState;
-  readonly features: FeatureHost;
-  readonly projectRefresh: ProjectRefreshController;
+  private readonly git: GitState;
+  private readonly features: FeatureHost;
+  private readonly projectRefresh: ProjectRefreshController;
 
   private activeTui: TUI | undefined;
   private footerRender: (() => void) | undefined;
+  private activeCapabilities: InputStyleCapabilities = {};
   private promptUiActive = false;
   private chaseEnabled = false;
   private chaseTimer: ReturnType<typeof setInterval> | undefined;
@@ -37,6 +42,53 @@ export class InputStyleRuntimeController implements InputStyleRuntime {
       intervalMs: PROJECT_REFRESH_INTERVAL_MS,
       onChange: () => this.requestRender(),
     });
+  }
+
+  applyStyle(ctx: ExtensionContext, adapter: InputStyleAdapter): void {
+    this.deactivateStyle(ctx);
+    this.activeCapabilities = adapter.capabilities ?? {};
+
+    if (this.activeCapabilities.projectRefresh) this.projectRefresh.start(ctx.cwd);
+    if (this.activeCapabilities.featureLifecycle) this.features.sessionStart(ctx);
+    this.setChaseEnabled(this.activeCapabilities.borderChase === true);
+
+    adapter.apply(ctx, this);
+    this.requestRender();
+  }
+
+  deactivateStyle(ctx: ExtensionContext): void {
+    this.stopBorderChase(false);
+    this.projectRefresh.stop();
+    this.features.sessionShutdown(ctx);
+    this.registerFooterRender(undefined);
+    this.setChaseEnabled(false);
+    this.activeCapabilities = {};
+  }
+
+  handleTurnEnd(ctx: ExtensionContext): void {
+    this.setWorkingMessage(undefined);
+    this.refreshThinkingLevel(ctx);
+    if (this.activeCapabilities.projectRefresh) this.projectRefresh.schedule();
+    this.requestRender();
+  }
+
+  handleModelSelect(ctx: ExtensionContext): void {
+    if (this.activeCapabilities.featureLifecycle) this.features.modelSelect(ctx);
+    this.refreshThinkingLevel(ctx);
+    this.requestRender();
+  }
+
+  refreshThinkingLevelAndRender(ctx: ExtensionContext): void {
+    this.refreshThinkingLevel(ctx);
+    this.requestRender();
+  }
+
+  currentGit(): ReturnType<GitState["current"]> {
+    return this.git.current();
+  }
+
+  footerRightSegments(theme: Parameters<FeatureHost["footerRight"]>[0]): string[] {
+    return this.activeCapabilities.featureLifecycle ? this.features.footerRight(theme) : [];
   }
 
   getThinkingLevel(ctx: ExtensionContext): string {

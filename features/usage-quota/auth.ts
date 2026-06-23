@@ -2,18 +2,8 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { isRecord, stringField } from "../../core/unknown-record";
 import { CODEX_PROVIDER_KEY, type CodexQuotaCredentials } from "./types";
-
-type UnknownRecord = Record<string, unknown>;
-
-function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === "object" && value !== null;
-}
-
-function stringField(record: UnknownRecord, key: string): string | undefined {
-  const value = record[key];
-  return typeof value === "string" && value.trim() ? value : undefined;
-}
 
 function codexCredentialsFromAuthFile(data: unknown): CodexQuotaCredentials | undefined {
   if (!isRecord(data)) return undefined;

@@ -1,7 +1,12 @@
-import type { TerminalLike } from "./terminal-split";
-
 export interface StickyRenderable {
   render(width: number): string[];
+}
+
+export interface TerminalLike {
+  columns: number;
+  rows: number;
+  kittyProtocolActive?: boolean;
+  write(data: string): void;
 }
 
 export interface StickyTuiLike {

@@ -23,7 +23,7 @@ type SetFooter = (this: UiCaptureTarget, factory: FooterFactory | undefined) => 
 type SetWidget = (
   this: UiCaptureTarget,
   id: string,
-  factory: WidgetFactory,
+  factory: WidgetFactory | undefined,
   options: { placement: "aboveEditor" },
 ) => unknown;
 
@@ -55,6 +55,7 @@ export function installStickyUiCapture(
   const target = asUiCaptureTarget(ui);
   const originalSetEditor = target.setEditorComponent;
   const originalSetFooter = target.setFooter;
+  const originalSetWidget = target.setWidget;
   let wrappedSetEditor: SetEditorComponent | null = null;
   let wrappedSetFooter: SetFooter | null = null;
 
@@ -108,6 +109,9 @@ export function installStickyUiCapture(
       if (wrappedSetFooter && target.setFooter === wrappedSetFooter) {
         target.setFooter = originalSetFooter;
       }
+      originalSetWidget?.call(target, "pi-sticky:probe", undefined, {
+        placement: "aboveEditor",
+      });
     },
   };
 }

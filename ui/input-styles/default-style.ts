@@ -17,15 +17,17 @@ export const defaultStyle: InputStyleAdapter = {
   id: "default",
   label: "Default",
   description: "Current pi-input-3000 chrome with badges, footer, and border chase",
+  capabilities: {
+    projectRefresh: true,
+    featureLifecycle: true,
+    borderChase: true,
+  },
 
   apply(ctx: ExtensionContext, runtime: InputStyleRuntime): void {
     ctx.ui.setHeader(undefined);
     ctx.ui.setWorkingMessage();
     ctx.ui.setWorkingIndicator();
     ctx.ui.setWorkingVisible(false);
-    runtime.projectRefresh.start(ctx.cwd);
-    runtime.features.sessionStart(ctx);
-    runtime.setChaseEnabled(true);
 
     ctx.ui.setEditorComponent((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
       runtime.registerActiveTui(tui);
@@ -37,7 +39,7 @@ export const defaultStyle: InputStyleAdapter = {
         () => ({
           meta: buildEditorMeta(
             ctx,
-            runtime.git.current(),
+            runtime.currentGit(),
             runtime.getThinkingLevel(ctx),
           ),
           chaseFrameIndex: runtime.isBorderChaseActive()
@@ -60,7 +62,7 @@ export const defaultStyle: InputStyleAdapter = {
         invalidate() {},
         render(width: number): string[] {
           return renderStatusFooter(ctx, footerData, width, theme, {
-            rightSegments: runtime.features.footerRight(theme),
+            rightSegments: runtime.footerRightSegments(theme),
           });
         },
       };
@@ -81,13 +83,5 @@ export const defaultStyle: InputStyleAdapter = {
       metadata: renderEditorMetadata(meta, innerWidth, theme),
       thinkingLevel,
     });
-  },
-
-  onTurnEnd(_ctx: ExtensionContext, runtime: InputStyleRuntime): void {
-    runtime.projectRefresh.schedule();
-  },
-
-  onModelSelect(ctx: ExtensionContext, runtime: InputStyleRuntime): void {
-    runtime.features.modelSelect(ctx);
   },
 };
