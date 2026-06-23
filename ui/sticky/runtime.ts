@@ -1,10 +1,10 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { Component, TUI } from "@earendil-works/pi-tui";
 import { renderPinnedCluster, hidePinnedSlots } from "./pinned-cluster-policy";
 import { PiTuiAdapter } from "./pi-tui-adapter";
 import { discoverStickySlots } from "./slot-discovery";
 import { TerminalSplitCompositor } from "./terminal-split";
 import { installStickyUiCapture, type StickyUiCapture } from "./ui-capture";
-import type { StickyTuiLike } from "./types";
 
 interface StickyInputRuntimeOptions {
   copyToClipboard(text: string): void;
@@ -30,8 +30,8 @@ export class StickyInputRuntime {
 
     this.stop({ resetExtendedKeyboardModes: false });
 
-    let capturedTui: StickyTuiLike | null = null;
-    let capturedEditor: unknown = null;
+    let capturedTui: TUI | null = null;
+    let capturedEditor: Component | null = null;
     let installTimer: ReturnType<typeof setTimeout> | null = null;
     let installRetryIndex = 0;
 

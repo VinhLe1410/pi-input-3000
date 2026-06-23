@@ -1,6 +1,6 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
-import { clampRenderedLines, padRight } from "../rendering";
+import { clampRenderedLines } from "../rendering";
 import { fitBorderLabels } from "./labels";
 
 const AMP_CHROME = {
@@ -76,7 +76,7 @@ export class AmpInputFrameRenderer {
 
   private renderContentRow(line: string, innerWidth: number): string {
     const border = this.theme.fg("borderMuted", AMP_CHROME.vertical);
-    return `${border} ${padRight(truncateToWidth(line, innerWidth, ""), innerWidth)} ${border}`;
+    return `${border} ${truncateToWidth(line, innerWidth, "", true)} ${border}`;
   }
 
   private renderSuggestionDivider(innerWidth: number): string {

@@ -1,10 +1,9 @@
-import type { Component, Terminal } from "@earendil-works/pi-tui";
+import type { TerminalInputHandler } from "@earendil-works/pi-coding-agent";
+import type { Component, Terminal, TUI } from "@earendil-works/pi-tui";
 import type { ExtendedKeyboardMode } from "./ansi";
 
-export type PatchedRenderable = Pick<Component, "render">;
-
 interface RenderPatch {
-  target: PatchedRenderable;
+  target: Component;
   originalRender: (width: number) => string[];
 }
 
@@ -16,22 +15,13 @@ type CompositeLineAt = (
   totalWidth: number,
 ) => string;
 
-type InputHandler = (data: string) => { consume?: boolean; data?: string } | undefined;
+type InputHandler = TerminalInputHandler;
 type RestoreStep = () => void;
 
-interface PiTuiPatchTarget {
-  terminal: Terminal;
-  render?: (width: number) => string[];
-  doRender?: () => void;
-  compositeLineAt?: CompositeLineAt;
-  addInputListener?: (handler: InputHandler) => () => void;
-  requestRender?: () => void;
-  hasOverlay?: () => boolean;
-  overlayStack?: Array<{ hidden?: boolean } | null | undefined>;
-  hardwareCursorRow?: number;
-  cursorRow?: number;
-  previousViewportTop?: number;
-}
+type PiTuiPatchTarget = Pick<
+  TUI,
+  "addInputListener" | "hasOverlay" | "render" | "requestRender" | "terminal"
+>;
 
 interface PiTuiAdapterOptions {
   getShowHardwareCursor?: () => boolean;
@@ -91,8 +81,9 @@ export class PiTuiAdapter {
     this.terminal = tui.terminal;
     this.rowsDescriptor = descriptorForRows(this.terminal);
     this.originalWrite = this.terminal.write.bind(this.terminal);
-    this.originalDoRender = typeof tui.doRender === "function" ? tui.doRender.bind(tui) : null;
-    this.originalRender = typeof tui.render === "function" ? tui.render.bind(tui) : null;
+    const doRender = Reflect.get(tui, "doRender");
+    this.originalDoRender = typeof doRender === "function" ? doRender.bind(tui) : null;
+    this.originalRender = tui.render.bind(tui);
     this.getShowHardwareCursorFn = options.getShowHardwareCursor ?? (() => false);
   }
 
@@ -143,29 +134,34 @@ export class PiTuiAdapter {
 
       if (this.originalDoRender) {
         const originalDoRender = this.originalDoRender;
-        this.tui.doRender = () => callbacks.renderPass(originalDoRender);
+        Reflect.set(this.tui, "doRender", () => callbacks.renderPass(originalDoRender));
         this.restoreSteps.push(() => {
-          this.tui.doRender = originalDoRender;
+          Reflect.set(this.tui, "doRender", originalDoRender);
         });
       }
 
-      if (typeof this.tui.compositeLineAt === "function") {
-        this.originalCompositeLineAt = this.tui.compositeLineAt.bind(this.tui);
-        this.tui.compositeLineAt = (
-          baseLine: string,
-          overlayLine: string,
-          startCol: number,
-          overlayWidth: number,
-          totalWidth: number,
-        ) => this.originalCompositeLineAt?.(
-          callbacks.normalizeCompositeLine(baseLine),
-          callbacks.normalizeCompositeLine(overlayLine),
-          startCol,
-          overlayWidth,
-          totalWidth,
-        ) ?? "";
+      const compositeLineAt = Reflect.get(this.tui, "compositeLineAt");
+      if (typeof compositeLineAt === "function") {
+        this.originalCompositeLineAt = compositeLineAt.bind(this.tui);
+        Reflect.set(
+          this.tui,
+          "compositeLineAt",
+          (
+            baseLine: string,
+            overlayLine: string,
+            startCol: number,
+            overlayWidth: number,
+            totalWidth: number,
+          ) => this.originalCompositeLineAt?.(
+            callbacks.normalizeCompositeLine(baseLine),
+            callbacks.normalizeCompositeLine(overlayLine),
+            startCol,
+            overlayWidth,
+            totalWidth,
+          ) ?? "",
+        );
         this.restoreSteps.push(() => {
-          this.tui.compositeLineAt = this.originalCompositeLineAt ?? undefined;
+          Reflect.set(this.tui, "compositeLineAt", this.originalCompositeLineAt ?? undefined);
           this.originalCompositeLineAt = null;
         });
       }
@@ -180,8 +176,10 @@ export class PiTuiAdapter {
   }
 
   hasVisibleOverlay(): boolean {
-    if (this.tui.hasOverlay?.()) return true;
-    return this.tui.overlayStack?.some((entry) => entry && entry.hidden !== true) ?? false;
+    if (this.tui.hasOverlay()) return true;
+    const overlayStack = Reflect.get(this.tui, "overlayStack");
+    return Array.isArray(overlayStack)
+      && overlayStack.some((entry: { hidden?: boolean } | null | undefined) => entry && entry.hidden !== true);
   }
 
   getShowHardwareCursor(): boolean {
@@ -195,23 +193,26 @@ export class PiTuiAdapter {
   }
 
   getCursorScreenRow(scrollBottom: number): number {
-    const hardwareCursorRow = typeof this.tui.hardwareCursorRow === "number"
-      ? this.tui.hardwareCursorRow
-      : typeof this.tui.cursorRow === "number"
-        ? this.tui.cursorRow
+    const hardwareCursorRowValue = Reflect.get(this.tui, "hardwareCursorRow");
+    const cursorRowValue = Reflect.get(this.tui, "cursorRow");
+    const viewportTopValue = Reflect.get(this.tui, "previousViewportTop");
+    const hardwareCursorRow = typeof hardwareCursorRowValue === "number"
+      ? hardwareCursorRowValue
+      : typeof cursorRowValue === "number"
+        ? cursorRowValue
         : 0;
-    const viewportTop = typeof this.tui.previousViewportTop === "number" ? this.tui.previousViewportTop : 0;
+    const viewportTop = typeof viewportTopValue === "number" ? viewportTopValue : 0;
     return Math.max(1, Math.min(scrollBottom, hardwareCursorRow - viewportTop + 1));
   }
 
-  hideRenderable(target: PatchedRenderable): void {
+  hideRenderable(target: Component): void {
     if (this.patchedRenders.some((patch) => patch.target === target)) return;
     const originalRender = target.render.bind(target);
     this.patchedRenders.push({ target, originalRender });
     target.render = () => [];
   }
 
-  renderHidden(target: PatchedRenderable, width: number): string[] {
+  renderHidden(target: Component, width: number): string[] {
     const patch = this.patchedRenders.find((candidate) => candidate.target === target);
     const render = patch?.originalRender ?? target.render.bind(target);
     return render(width);

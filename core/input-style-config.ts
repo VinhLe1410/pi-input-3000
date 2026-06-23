@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { isRecord } from "./unknown-record";
 
 export type InputStyle = "default" | "amp";
 
@@ -10,14 +11,8 @@ export interface InputStyleConfig {
   style: InputStyle;
 }
 
-type UnknownRecord = Record<string, unknown>;
-
 const CONFIG_FILE_NAME = "pi-input-3000.json";
 const DEFAULT_CONFIG: InputStyleConfig = { style: "default" };
-
-function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === "object" && value !== null;
-}
 
 export function isInputStyle(value: string): value is InputStyle {
   return INPUT_STYLES.some((style) => style === value);

@@ -1,45 +1,22 @@
-/* eslint-disable @typescript-eslint/consistent-type-assertions */
-
-import type { Component } from "@earendil-works/pi-tui";
-import type { StickyTuiLike } from "./types";
+import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
+import type { Component, TUI } from "@earendil-works/pi-tui";
 
 interface StickyUiCaptureCallbacks {
-  editorFactoryStarted(tui: StickyTuiLike): void;
-  editorCaptured(tui: StickyTuiLike, editor: unknown): void;
-  footerFactoryStarted(tui: StickyTuiLike): void;
-  footerCaptured(tui: StickyTuiLike): void;
-  probeCaptured(tui: StickyTuiLike): void;
+  editorFactoryStarted(tui: TUI): void;
+  editorCaptured(tui: TUI, editor: Component): void;
+  footerFactoryStarted(tui: TUI): void;
+  footerCaptured(tui: TUI): void;
+  probeCaptured(tui: TUI): void;
 }
 
-type ProbeWidget = Component;
-
-type EditorFactory = (tui: StickyTuiLike, theme: unknown, keybindings: unknown) => unknown;
-type FooterFactory = (tui: StickyTuiLike, theme: unknown, footerData: unknown) => unknown;
-type WidgetFactory = (tui: StickyTuiLike) => ProbeWidget;
-type SetEditorComponent = (this: UiCaptureTarget, factory: EditorFactory | undefined) => unknown;
-type SetFooter = (this: UiCaptureTarget, factory: FooterFactory | undefined) => unknown;
-type SetWidget = (
-  this: UiCaptureTarget,
-  id: string,
-  factory: WidgetFactory | undefined,
-  options: { placement: "aboveEditor" },
-) => unknown;
-
-interface UiCaptureTarget {
-  setEditorComponent?: SetEditorComponent;
-  setFooter?: SetFooter;
-  setWidget?: SetWidget;
-}
+type EditorFactory = NonNullable<Parameters<ExtensionUIContext["setEditorComponent"]>[0]>;
+type FooterFactory = Parameters<ExtensionUIContext["setFooter"]>[0];
 
 export interface StickyUiCapture {
   restore(): void;
 }
 
-function asUiCaptureTarget(ui: unknown): UiCaptureTarget {
-  return ui != null && typeof ui === "object" ? ui as UiCaptureTarget : {};
-}
-
-function createProbeWidget(): ProbeWidget {
+function createProbeWidget(): Component {
   return {
     render: (_width: number): string[] => [],
     invalidate(): void {},
@@ -47,52 +24,47 @@ function createProbeWidget(): ProbeWidget {
 }
 
 export function installStickyUiCapture(
-  ui: unknown,
+  ui: ExtensionUIContext,
   callbacks: StickyUiCaptureCallbacks,
 ): StickyUiCapture {
-  const target = asUiCaptureTarget(ui);
-  const originalSetEditor = target.setEditorComponent;
-  const originalSetFooter = target.setFooter;
-  const originalSetWidget = target.setWidget;
-  let wrappedSetEditor: SetEditorComponent | null = null;
-  let wrappedSetFooter: SetFooter | null = null;
+  const originalSetEditor = ui.setEditorComponent;
+  const originalSetFooter = ui.setFooter;
+  const originalSetWidget = ui.setWidget;
+  let wrappedSetEditor: ExtensionUIContext["setEditorComponent"] | null = null;
+  let wrappedSetFooter: ExtensionUIContext["setFooter"] | null = null;
 
-  if (originalSetEditor) {
-    wrappedSetEditor = function setStickyEditorComponent(factory) {
-      const wrapped = typeof factory === "function"
-        ? (tui: StickyTuiLike, theme: unknown, keybindings: unknown) => {
-            callbacks.editorFactoryStarted(tui);
-            const editor = factory(tui, theme, keybindings);
-            callbacks.editorCaptured(tui, editor);
-            return editor;
-          }
-        : factory;
+  wrappedSetEditor = function setStickyEditorComponent(factory) {
+    const wrapped: EditorFactory | undefined = typeof factory === "function"
+      ? (tui, theme, keybindings) => {
+          callbacks.editorFactoryStarted(tui);
+          const editor = factory(tui, theme, keybindings);
+          callbacks.editorCaptured(tui, editor);
+          return editor;
+        }
+      : factory;
 
-      return originalSetEditor.call(target, wrapped);
-    };
-    target.setEditorComponent = wrappedSetEditor;
-  }
+    return originalSetEditor.call(ui, wrapped);
+  };
+  ui.setEditorComponent = wrappedSetEditor;
 
-  if (originalSetFooter) {
-    wrappedSetFooter = function setStickyFooter(factory) {
-      const wrapped = typeof factory === "function"
-        ? (tui: StickyTuiLike, theme: unknown, footerData: unknown) => {
-            callbacks.footerFactoryStarted(tui);
-            const footer = factory(tui, theme, footerData);
-            callbacks.footerCaptured(tui);
-            return footer;
-          }
-        : factory;
+  wrappedSetFooter = function setStickyFooter(factory) {
+    const wrapped: FooterFactory = typeof factory === "function"
+      ? (tui, theme, footerData) => {
+          callbacks.footerFactoryStarted(tui);
+          const footer = factory(tui, theme, footerData);
+          callbacks.footerCaptured(tui);
+          return footer;
+        }
+      : factory;
 
-      return originalSetFooter.call(target, wrapped);
-    };
-    target.setFooter = wrappedSetFooter;
-  }
+    return originalSetFooter.call(ui, wrapped);
+  };
+  ui.setFooter = wrappedSetFooter;
 
-  target.setWidget?.call(
-    target,
+  originalSetWidget.call(
+    ui,
     "pi-sticky:probe",
-    (tui: StickyTuiLike) => {
+    (tui) => {
       callbacks.probeCaptured(tui);
       return createProbeWidget();
     },
@@ -101,13 +73,13 @@ export function installStickyUiCapture(
 
   return {
     restore(): void {
-      if (wrappedSetEditor && target.setEditorComponent === wrappedSetEditor) {
-        target.setEditorComponent = originalSetEditor;
+      if (wrappedSetEditor && ui.setEditorComponent === wrappedSetEditor) {
+        ui.setEditorComponent = originalSetEditor;
       }
-      if (wrappedSetFooter && target.setFooter === wrappedSetFooter) {
-        target.setFooter = originalSetFooter;
+      if (wrappedSetFooter && ui.setFooter === wrappedSetFooter) {
+        ui.setFooter = originalSetFooter;
       }
-      originalSetWidget?.call(target, "pi-sticky:probe", undefined, {
+      originalSetWidget.call(ui, "pi-sticky:probe", undefined, {
         placement: "aboveEditor",
       });
     },

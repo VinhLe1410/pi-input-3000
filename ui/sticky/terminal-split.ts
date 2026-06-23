@@ -1,4 +1,4 @@
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth, type Component, type Terminal } from "@earendil-works/pi-tui";
 import {
   beginSynchronizedOutput,
   clearLine,
@@ -32,7 +32,7 @@ import {
   type SgrMousePacket,
 } from "./terminal-input";
 import type { FixedEditorClusterRender } from "./cluster.ts";
-import { PiTuiAdapter, type PatchedRenderable } from "./pi-tui-adapter";
+import { PiTuiAdapter } from "./pi-tui-adapter";
 import { StickyScrollModel, type JumpDirection } from "./scroll-model";
 import {
   isLocationInsideSelection,
@@ -44,7 +44,6 @@ import {
   type SelectionPoint,
   type SelectionSnapshot,
 } from "./selection-model";
-import type { Terminal } from "@earendil-works/pi-tui";
 
 export {
   beginSynchronizedOutput,
@@ -197,11 +196,11 @@ export class TerminalSplitCompositor {
     this.installed = true;
   }
 
-  hideRenderable(target: PatchedRenderable): void {
+  hideRenderable(target: Component): void {
     this.adapter.hideRenderable(target);
   }
 
-  renderHidden(target: PatchedRenderable, width: number): string[] {
+  renderHidden(target: Component, width: number): string[] {
     return this.adapter.renderHidden(target, width);
   }
 

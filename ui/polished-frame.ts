@@ -14,7 +14,7 @@ import {
   createBorderChase,
   type BorderChase,
 } from "./editor-chase";
-import { clampRenderedLines, padRight } from "./rendering";
+import { clampRenderedLines } from "./rendering";
 import { thinkingColor } from "./theme";
 
 export interface PolishedInputFrame {
@@ -286,6 +286,6 @@ export class PolishedInputFrameRenderer {
   }
 
   private fillLine(content: string, width: number): string {
-    return padRight(truncateToWidth(content, Math.max(0, width), ""), width);
+    return truncateToWidth(content, Math.max(0, width), "", true);
   }
 }

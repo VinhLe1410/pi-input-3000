@@ -1,6 +1,7 @@
+import type { Component } from "@earendil-works/pi-tui";
 import { renderFixedEditorCluster, type FixedEditorClusterRender } from "./cluster";
 import type { TerminalSplitCompositor } from "./terminal-split";
-import type { StickyRenderable, StickySlots } from "./types";
+import type { StickySlots } from "./types";
 
 export interface PinnedClusterPolicy {
   includeStatus: boolean;
@@ -20,7 +21,7 @@ interface RenderPinnedClusterInput {
 
 function renderSlot(
   compositor: TerminalSplitCompositor,
-  slot: StickyRenderable | null,
+  slot: Component | null,
   width: number,
 ): string[] {
   return slot ? compositor.renderHidden(slot, width) : [];
