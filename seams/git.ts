@@ -19,14 +19,6 @@ export type GitStatusSummary = {
   dirty: boolean;
   ahead: number;
   behind: number;
-  conflicted: number;
-  untracked: number;
-  stashed: boolean;
-  modified: number;
-  staged: number;
-  renamed: number;
-  deleted: number;
-  typechanged: number;
 };
 
 export interface GitState {
@@ -40,23 +32,11 @@ export function emptyGitStatus(): GitStatusSummary {
     dirty: false,
     ahead: 0,
     behind: 0,
-    conflicted: 0,
-    untracked: 0,
-    stashed: false,
-    modified: 0,
-    staged: 0,
-    renamed: 0,
-    deleted: 0,
-    typechanged: 0,
   };
 }
 
-export function parseGitStatusPorcelain(
-  stdoutText: string,
-  hasStash: boolean,
-): GitStatusSummary {
+export function parseGitStatusPorcelain(stdoutText: string): GitStatusSummary {
   const status = emptyGitStatus();
-  status.stashed = hasStash;
 
   for (const line of stdoutText.split(/\r?\n/)) {
     if (!line) continue;
@@ -76,29 +56,6 @@ export function parseGitStatusPorcelain(
     if (line.startsWith("#")) continue;
 
     status.dirty = true;
-
-    if (line.startsWith("? ")) {
-      status.untracked += 1;
-      continue;
-    }
-    if (line.startsWith("u ")) {
-      status.conflicted += 1;
-      continue;
-    }
-    if (!(line.startsWith("1 ") || line.startsWith("2 "))) continue;
-
-    const xy = line.split(" ")[1] ?? "..";
-    const x = xy[0] ?? ".";
-    const y = xy[1] ?? ".";
-
-    if (x === "R") status.renamed += 1;
-    else if (x === "D") status.deleted += 1;
-    else if (x === "T") status.typechanged += 1;
-    else if (x !== "." && x !== " ") status.staged += 1;
-
-    if (y === "M") status.modified += 1;
-    else if (y === "D") status.deleted += 1;
-    else if (y === "T") status.typechanged += 1;
   }
 
   return status;
@@ -106,22 +63,13 @@ export function parseGitStatusPorcelain(
 
 export async function readGitStatus(cwd: string): Promise<GitStatusSummary> {
   try {
-    const [{ stdout: statusStdout }, stashResult] = await Promise.all([
-      execFileAsync(
-        "git",
-        ["status", "--porcelain=2", "--branch"],
-        gitExecOptions(cwd),
-      ),
-      execFileAsync(
-        "git",
-        ["rev-parse", "--verify", "--quiet", "refs/stash"],
-        gitExecOptions(cwd),
-      ).catch(() => ({ stdout: "" })),
-    ]);
-    const stdoutText = typeof statusStdout === "string" ? statusStdout : String(statusStdout);
-    const stashStdout =
-      typeof stashResult.stdout === "string" ? stashResult.stdout : String(stashResult.stdout);
-    return parseGitStatusPorcelain(stdoutText, stashStdout.trim().length > 0);
+    const { stdout } = await execFileAsync(
+      "git",
+      ["status", "--porcelain=2", "--branch"],
+      gitExecOptions(cwd),
+    );
+
+    return parseGitStatusPorcelain(typeof stdout === "string" ? stdout : String(stdout));
   } catch {
     return emptyGitStatus();
   }
@@ -132,15 +80,7 @@ function sameGitStatus(a: GitStatusSummary, b: GitStatusSummary): boolean {
     a.branch === b.branch &&
     a.dirty === b.dirty &&
     a.ahead === b.ahead &&
-    a.behind === b.behind &&
-    a.conflicted === b.conflicted &&
-    a.untracked === b.untracked &&
-    a.stashed === b.stashed &&
-    a.modified === b.modified &&
-    a.staged === b.staged &&
-    a.renamed === b.renamed &&
-    a.deleted === b.deleted &&
-    a.typechanged === b.typechanged
+    a.behind === b.behind
   );
 }
 

@@ -17,6 +17,8 @@ import {
   resetScrollRegion,
   setScrollRegion,
   showCursor,
+  stripAnsi,
+  stripOscSequences,
   type ExtendedKeyboardMode,
 } from "./ansi";
 import {
@@ -38,7 +40,6 @@ import {
   isLocationInsideSelection,
   renderSelectionHighlight as renderSelectedLine,
   selectedText,
-  stripAnsi,
   type SelectionArea,
   type SelectionLocation,
   type SelectionPoint,
@@ -76,10 +77,6 @@ const CONTEXT_MENU_MOUSE_REPORTING_PAUSE_MS = 1200;
 const CONTEXT_MENU_SELECTION_RESTORE_WINDOW_MS = 5000;
 const CONTEXT_MENU_CLIPBOARD_RESTORE_INTERVAL_MS = 100;
 const DOUBLE_CLICK_MS = 500;
-
-function stripOscSequences(line: string): string {
-  return line.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "");
-}
 
 function sanitizeLine(line: string, width: number): string {
   return visibleWidth(line) > width ? truncateToWidth(line, width, "", true) : line;

@@ -13,28 +13,9 @@ const SUPER_SHORTCUT_PATTERNS = new Map<string, RegExp>([
   ["super+shift+end", /^\x1b\[(?:1;10(?::[12])?F|57424;10(?::[12])?u|8;10(?::[12])?~)$/],
 ]);
 
-export function shortcutUsesSuper(shortcut: string): boolean {
+function shortcutUsesSuper(shortcut: string): boolean {
   const parts = shortcut.toLowerCase().split("+");
   return parts.slice(0, -1).includes("super");
-}
-
-export function isSupportedSuperShortcut(shortcut: string): boolean {
-  return SUPER_SHORTCUT_PATTERNS.has(shortcut.toLowerCase());
-}
-
-export function shortcutConflictKey(shortcut: string): string {
-  switch (shortcut.toLowerCase()) {
-    case "super+home":
-      return "super+up";
-    case "super+end":
-      return "super+down";
-    case "super+shift+home":
-      return "super+shift+up";
-    case "super+shift+end":
-      return "super+shift+down";
-    default:
-      return shortcut;
-  }
 }
 
 export function matchesConfiguredShortcut(data: string, shortcut: KeyId): boolean {

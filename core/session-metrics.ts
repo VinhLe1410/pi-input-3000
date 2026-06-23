@@ -1,4 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { roundedDisplayPercent } from "./format";
 
 export function sessionCostTotal(ctx: ExtensionContext): number {
   let total = 0;
@@ -23,7 +24,7 @@ export function contextPercent(ctx: ExtensionContext): number | undefined {
   const percent = usage?.percent;
   if (percent === undefined || percent === null || !Number.isFinite(percent)) return undefined;
 
-  return Math.max(0, Math.min(999, Math.round(percent)));
+  return roundedDisplayPercent(percent);
 }
 
 export function formatCwd(cwd: string): string {

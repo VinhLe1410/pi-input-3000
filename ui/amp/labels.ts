@@ -46,24 +46,15 @@ export function fitBorderLabels(
   if (width <= 0) return "";
   if (width === 1) return border(caps.left);
 
-  let leftText = left;
-  let rightText = right;
   const fixedWidth = visibleWidth(caps.left) + visibleWidth(caps.right);
   const minimumGap = 1;
-
-  while (
-    fixedWidth + visibleWidth(leftText) + visibleWidth(rightText) + minimumGap > width &&
-    visibleWidth(rightText) > 0
-  ) {
-    rightText = truncateToWidth(rightText, Math.max(0, visibleWidth(rightText) - 1), "");
-  }
-
-  while (
-    fixedWidth + visibleWidth(leftText) + visibleWidth(rightText) + minimumGap > width &&
-    visibleWidth(leftText) > 0
-  ) {
-    leftText = truncateToWidth(leftText, Math.max(0, visibleWidth(leftText) - 1), "");
-  }
+  const labelWidth = Math.max(0, width - fixedWidth - minimumGap);
+  const leftWidth = visibleWidth(left);
+  const rightWidth = visibleWidth(right);
+  const rightMaxWidth = Math.max(0, labelWidth - leftWidth);
+  const rightText = rightWidth > rightMaxWidth ? truncateToWidth(right, rightMaxWidth, "") : right;
+  const leftMaxWidth = Math.max(0, labelWidth - visibleWidth(rightText));
+  const leftText = leftWidth > leftMaxWidth ? truncateToWidth(left, leftMaxWidth, "") : left;
 
   const gapWidth = Math.max(
     0,

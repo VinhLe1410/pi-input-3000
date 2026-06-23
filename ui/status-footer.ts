@@ -36,21 +36,23 @@ function fitStatusTexts(
 ): string {
   if (maxWidth <= 0) return "";
 
-  const fitted: string[] = [];
+  let fitted = "";
   for (const text of statusTexts) {
-    const candidate = joinStatusTexts([...fitted, text], separator);
+    if (!text) continue;
+
+    const candidate = fitted ? `${fitted}${separator}${text}` : text;
     if (visibleWidth(candidate) <= maxWidth) {
-      fitted.push(text);
+      fitted = candidate;
       continue;
     }
 
-    if (fitted.length === 0) {
+    if (!fitted) {
       return maxWidth > 1 ? truncateToWidth(text, maxWidth, "…") : "";
     }
     break;
   }
 
-  return joinStatusTexts(fitted, separator);
+  return fitted;
 }
 
 function prependStatusArea(base: string, statusText: string, separator: string): string {

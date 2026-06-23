@@ -1,5 +1,13 @@
 export type ExtendedKeyboardMode = "kitty" | "modifyOtherKeys";
 
+export function stripOscSequences(line: string): string {
+  return line.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "");
+}
+
+export function stripAnsi(line: string): string {
+  return stripOscSequences(line).replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
+}
+
 export function beginSynchronizedOutput(): string {
   return "\x1b[?2026h";
 }

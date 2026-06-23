@@ -1,5 +1,6 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
+import { roundedDisplayPercent } from "../../core/format";
 import { percentColor } from "../../ui/theme";
 import { QUOTA_BADGE_LABELS, QUOTA_ICONS } from "./config";
 import type { CodexQuotaWindow, QuotaState } from "./types";
@@ -10,7 +11,7 @@ function quotaLabel(label: string): string {
 }
 
 function renderQuotaBadge(window: CodexQuotaWindow, theme: Theme): string {
-  const rounded = Math.max(0, Math.min(999, Math.round(window.usedPercent)));
+  const rounded = roundedDisplayPercent(window.usedPercent);
   const label = theme.bg(
     "toolPendingBg",
     theme.bold(theme.fg("muted", ` ${quotaLabel(window.label)} `)),

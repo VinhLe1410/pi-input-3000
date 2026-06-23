@@ -1,4 +1,5 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { stripAnsi } from "./ansi";
 
 export interface SelectionPoint {
   line: number;
@@ -16,14 +17,6 @@ export interface SelectionSnapshot {
   area: SelectionArea | null;
   anchor: SelectionPoint | null;
   focus: SelectionPoint | null;
-}
-
-function stripOscSequences(line: string): string {
-  return line.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "");
-}
-
-export function stripAnsi(line: string): string {
-  return stripOscSequences(line).replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
 }
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
@@ -81,8 +74,9 @@ export function renderSelectionHighlight(
   if (!range) return line;
 
   const plain = stripAnsi(line);
-  const startCol = Math.max(0, Math.min(range.startCol, visibleWidth(plain)));
-  const endCol = Math.max(startCol, Math.min(range.endCol, visibleWidth(plain)));
+  const plainWidth = visibleWidth(plain);
+  const startCol = Math.max(0, Math.min(range.startCol, plainWidth));
+  const endCol = Math.max(startCol, Math.min(range.endCol, plainWidth));
   if (startCol === endCol) return line;
 
   const before = sliceColumns(plain, 0, startCol);

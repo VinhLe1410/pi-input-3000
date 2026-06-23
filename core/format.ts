@@ -24,7 +24,12 @@ export function clampPercent(value: number): number {
 export function normalizePercent(value: number): number {
   if (!Number.isFinite(value)) return 0;
   const normalized = value <= 1 && value >= 0 ? value * 100 : value;
-  return Math.max(0, Math.min(100, normalized));
+  return clampPercent(normalized);
+}
+
+export function roundedDisplayPercent(value: number, max = 999): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(max, Math.round(value)));
 }
 
 export function getWindowLabel(

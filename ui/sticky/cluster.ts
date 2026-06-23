@@ -1,4 +1,5 @@
 import { CURSOR_MARKER, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { stripAnsi } from "./ansi";
 
 export interface FixedEditorClusterInput {
   width: number;
@@ -8,7 +9,6 @@ export interface FixedEditorClusterInput {
   editorLines: string[];
   secondaryLines?: string[];
   transcriptLines?: string[];
-  lastPromptLines?: string[];
 }
 
 export interface FixedEditorCursor {
@@ -44,7 +44,7 @@ function capEditorLines(lines: string[], count: number): string[] {
     return lines.slice(start, start + count);
   }
 
-  const selectedRow = lines.findIndex((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimStart().startsWith("→ "));
+  const selectedRow = lines.findIndex((line) => stripAnsi(line).trimStart().startsWith("→ "));
   if (selectedRow === -1) {
     return lines.slice(0, count);
   }
@@ -81,7 +81,6 @@ export function renderFixedEditorCluster(input: FixedEditorClusterInput): FixedE
   const editorSource = normalizeLines(input.editorLines, width);
   const secondaryLines = normalizeLines(input.secondaryLines, width);
   const transcriptLines = normalizeLines(input.transcriptLines, width);
-  const lastPromptLines = normalizeLines(input.lastPromptLines, width);
 
   const editorLines = capEditorLines(editorSource, maxRows);
   let remaining = maxRows - editorLines.length;
@@ -91,9 +90,6 @@ export function renderFixedEditorCluster(input: FixedEditorClusterInput): FixedE
 
   const secondary = takeTail(secondaryLines, remaining);
   remaining -= secondary.length;
-
-  const lastPrompt = takeTail(lastPromptLines, remaining);
-  remaining -= lastPrompt.length;
 
   const status = takeTail(statusLines, remaining);
   remaining -= status.length;
@@ -106,6 +102,5 @@ export function renderFixedEditorCluster(input: FixedEditorClusterInput): FixedE
     ...editorLines,
     ...secondary,
     ...transcript,
-    ...lastPrompt,
   ]);
 }

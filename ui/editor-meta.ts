@@ -2,6 +2,7 @@ import {
   buildSessionContext,
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { roundedDisplayPercent } from "../core/format";
 import type { GitStatusSummary } from "../seams/git";
 import type { EditorBranchMeta, EditorContextMeter, EditorMeta } from "./editor-types";
 
@@ -37,7 +38,7 @@ function buildContextMeter(ctx: ExtensionContext): EditorContextMeter | undefine
 
   const tokens = usage?.tokens ?? 0;
   const percent = usage?.percent ?? (tokens / contextWindow) * 100;
-  const roundedPercent = Math.max(0, Math.min(999, Math.round(percent)));
+  const roundedPercent = roundedDisplayPercent(percent);
 
   return {
     percent: roundedPercent,
