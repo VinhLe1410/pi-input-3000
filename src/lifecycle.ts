@@ -6,8 +6,10 @@ import {
 import {
   findInputStyleAdapter,
   type InputStyle,
+  type InputStyleConfig,
 } from "./input-styles";
 import type { InputStyleRuntimeController } from "./runtime";
+import type { StickyInputController } from "./sticky/install-sticky-input";
 import { showInputStyleMenu } from "./settings/menu";
 
 function resetPromptUi(ctx: ExtensionContext): void {
@@ -18,18 +20,29 @@ function resetPromptUi(ctx: ExtensionContext): void {
   ctx.ui.setWorkingVisible(true);
 }
 
+function formatInputStyleLabel(style: InputStyle): string {
+  return style === "amp" ? "Amp-inspired" : "Default";
+}
+
 export function registerInputStyleLifecycle(
   pi: ExtensionAPI,
   runtime: InputStyleRuntimeController,
+  stickyInput: StickyInputController,
 ): void {
-  let activeStyle: InputStyle = loadInputStyleConfig().style;
+  let activeConfig: InputStyleConfig = loadInputStyleConfig();
 
   function applyInputStyle(ctx: ExtensionContext, style: InputStyle): void {
     const adapter = findInputStyleAdapter(style);
     if (!adapter) return;
 
-    activeStyle = style;
+    activeConfig = { ...activeConfig, style };
     runtime.applyStyle(ctx, adapter);
+  }
+
+  function applyConfig(ctx: ExtensionContext, config: InputStyleConfig): void {
+    activeConfig = config;
+    stickyInput.setEnabled(ctx, config.stickyInput);
+    applyInputStyle(ctx, config.style);
   }
 
   pi.registerCommand("input-style", {
@@ -40,20 +53,20 @@ export function registerInputStyleLifecycle(
         return;
       }
 
-      const selected = await showInputStyleMenu(ctx, activeStyle);
+      const selected = await showInputStyleMenu(ctx, activeConfig);
       if (!selected) return;
 
       try {
-        saveInputStyleConfig({ style: selected });
+        saveInputStyleConfig(selected);
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        ctx.ui.notify(`Failed to save input style: ${message}`, "error");
+        ctx.ui.notify(`Failed to save input settings: ${message}`, "error");
         return;
       }
 
-      applyInputStyle(ctx, selected);
+      applyConfig(ctx, selected);
       ctx.ui.notify(
-        `Input style: ${selected === "amp" ? "Amp-inspired" : "Default"}`,
+        `Input style: ${formatInputStyleLabel(selected.style)}; sticky input: ${selected.stickyInput ? "on" : "off"}`,
         "info",
       );
     },
@@ -68,7 +81,8 @@ export function registerInputStyleLifecycle(
     }
 
     runtime.setPromptUiActive(true);
-    applyInputStyle(ctx, loadInputStyleConfig().style);
+    activeConfig = loadInputStyleConfig();
+    applyInputStyle(ctx, activeConfig.style);
   });
 
   pi.on("session_shutdown", (_event, ctx) => {

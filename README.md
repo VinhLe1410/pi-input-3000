@@ -9,7 +9,7 @@ https://github.com/user-attachments/assets/26a42a07-b4f0-4419-ac40-c9c7be68c181
 1. **Default input:** OpenCode-alike chrome with model/thinking/context/git badges, animated border chase, whimsical working messages, and extension/package status display.
 2. **Amp-inspired input:** Minimal, zen input UI with cost, thinking, context %, and cwd labels.
 3. **Sticky input:** Terminal split keeps the input/editor/footer pinned while chat history scrolls with mouse wheel and Page Up/Down.
-4. **Settings:** `/input-style` toggles between styles with accurate previews. The choice is saved to `~/.pi/agent/pi-input-3000.json`.
+4. **Settings:** `/input-style` toggles between styles and sticky input with accurate previews. Choices are saved to `~/.pi/agent/pi-input-3000.json`.
 
 ## Code layout
 

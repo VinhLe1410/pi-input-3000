@@ -9,6 +9,7 @@ export const INPUT_STYLES: readonly InputStyle[] = ["default", "amp"];
 
 export interface InputStyleConfig {
   style: InputStyle;
+  stickyInput: boolean;
 }
 
 export interface ProjectBranchStatus {

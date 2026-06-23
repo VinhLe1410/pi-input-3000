@@ -129,8 +129,12 @@ export class StickyInputRuntime {
     scheduleInstall();
   }
 
-  shutdown(): void {
+  disable(): void {
     this.stop({ resetExtendedKeyboardModes: true });
+  }
+
+  shutdown(): void {
+    this.disable();
   }
 
   private stop(options: StopOptions): void {
