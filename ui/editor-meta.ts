@@ -64,17 +64,31 @@ function buildBranchMeta(git: GitStatusSummary): EditorBranchMeta | undefined {
   };
 }
 
+function buildBaseEditorMeta(
+  ctx: ExtensionContext,
+  thinkingLevel = getThinkingLevel(ctx),
+): Omit<EditorMeta, "branch"> {
+  return {
+    modelLabel: ctx.model?.name ?? ctx.model?.id ?? "no-model",
+    thinkingLevel,
+    contextMeter: buildContextMeter(ctx),
+  };
+}
+
 export function buildEditorMeta(
   ctx: ExtensionContext,
   git: GitStatusSummary,
   thinkingLevel = getThinkingLevel(ctx),
 ): EditorMeta {
-  const modelLabel = ctx.model?.name ?? ctx.model?.id ?? "no-model";
-
   return {
-    modelLabel,
-    thinkingLevel,
-    contextMeter: buildContextMeter(ctx),
+    ...buildBaseEditorMeta(ctx, thinkingLevel),
     branch: buildBranchMeta(git),
   };
+}
+
+export function buildEditorPreviewMeta(
+  ctx: ExtensionContext,
+  thinkingLevel = getThinkingLevel(ctx),
+): EditorMeta {
+  return buildBaseEditorMeta(ctx, thinkingLevel);
 }
