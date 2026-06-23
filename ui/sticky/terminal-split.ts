@@ -44,7 +44,7 @@ import {
   type SelectionPoint,
   type SelectionSnapshot,
 } from "./selection-model";
-import type { TerminalLike } from "./types";
+import type { Terminal } from "@earendil-works/pi-tui";
 
 export {
   beginSynchronizedOutput,
@@ -123,7 +123,7 @@ export function buildFixedClusterPaint(
 
 export class TerminalSplitCompositor {
   private readonly adapter: PiTuiAdapter;
-  private readonly terminal: TerminalLike;
+  private readonly terminal: Terminal;
   private readonly renderCluster: (width: number, terminalRows: number) => FixedEditorClusterRender;
   private readonly mouseScroll: boolean;
   private readonly keyboardScrollShortcuts: KeyboardScrollShortcuts;

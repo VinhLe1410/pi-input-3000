@@ -1,9 +1,7 @@
+import type { Component, Terminal } from "@earendil-works/pi-tui";
 import type { ExtendedKeyboardMode } from "./ansi";
-import type { TerminalLike } from "./types";
 
-export interface PatchedRenderable {
-  render(width: number): string[];
-}
+export type PatchedRenderable = Pick<Component, "render">;
 
 interface RenderPatch {
   target: PatchedRenderable;
@@ -22,7 +20,7 @@ type InputHandler = (data: string) => { consume?: boolean; data?: string } | und
 type RestoreStep = () => void;
 
 interface PiTuiPatchTarget {
-  terminal: TerminalLike;
+  terminal: Terminal;
   render?: (width: number) => string[];
   doRender?: () => void;
   compositeLineAt?: CompositeLineAt;
@@ -48,7 +46,7 @@ interface PiTuiInstallCallbacks {
   normalizeCompositeLine(line: string): string;
 }
 
-function descriptorForRows(terminal: TerminalLike): PropertyDescriptor | undefined {
+function descriptorForRows(terminal: Terminal): PropertyDescriptor | undefined {
   let target: object | null = terminal;
   while (target) {
     const descriptor = Object.getOwnPropertyDescriptor(target, "rows");
@@ -59,7 +57,7 @@ function descriptorForRows(terminal: TerminalLike): PropertyDescriptor | undefin
   return undefined;
 }
 
-function readRows(terminal: TerminalLike, descriptor: PropertyDescriptor | undefined): number {
+function readRows(terminal: Terminal, descriptor: PropertyDescriptor | undefined): number {
   if (descriptor?.get) {
     const value = descriptor.get.call(terminal);
     return typeof value === "number" && Number.isFinite(value) ? value : 24;
@@ -75,7 +73,7 @@ function readRows(terminal: TerminalLike, descriptor: PropertyDescriptor | undef
 }
 
 export class PiTuiAdapter {
-  readonly terminal: TerminalLike;
+  readonly terminal: Terminal;
 
   private readonly tui: PiTuiPatchTarget;
   private readonly rowsDescriptor: PropertyDescriptor | undefined;

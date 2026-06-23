@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/consistent-type-assertions */
 
+import type { Component } from "@earendil-works/pi-tui";
 import type { StickyTuiLike } from "./types";
 
 interface StickyUiCaptureCallbacks {
@@ -10,10 +11,7 @@ interface StickyUiCaptureCallbacks {
   probeCaptured(tui: StickyTuiLike): void;
 }
 
-interface ProbeWidget {
-  render(width: number): string[];
-  invalidate(): void;
-}
+type ProbeWidget = Component;
 
 type EditorFactory = (tui: StickyTuiLike, theme: unknown, keybindings: unknown) => unknown;
 type FooterFactory = (tui: StickyTuiLike, theme: unknown, footerData: unknown) => unknown;

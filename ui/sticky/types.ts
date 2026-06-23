@@ -1,16 +1,9 @@
-export interface StickyRenderable {
-  render(width: number): string[];
-}
+import type { Component, Terminal } from "@earendil-works/pi-tui";
 
-export interface TerminalLike {
-  columns: number;
-  rows: number;
-  kittyProtocolActive?: boolean;
-  write(data: string): void;
-}
+export type StickyRenderable = Pick<Component, "render">;
 
 export interface StickyTuiLike {
-  terminal: TerminalLike;
+  terminal: Terminal;
   children?: unknown[];
   requestRender?: () => void;
   getShowHardwareCursor?: () => boolean;

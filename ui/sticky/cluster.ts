@@ -1,6 +1,4 @@
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-
-export const CURSOR_MARKER = "\x1b_pi:c\x07";
+import { CURSOR_MARKER, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 export interface FixedEditorClusterInput {
   width: number;
