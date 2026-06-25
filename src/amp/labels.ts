@@ -28,7 +28,7 @@ export function renderAmpTopLeftLabel(state: BashModeState, theme: Theme): strin
   if (state === "off") return "";
 
   const color = state === "no-context" ? "dim" : "bashMode";
-  return ` ${theme.bold(theme.fg(color, "BASH"))} `;
+  return ` ${theme.bold(theme.fg(color, "$"))} `;
 }
 
 export function renderAmpTopRightLabel(
