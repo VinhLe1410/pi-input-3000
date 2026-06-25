@@ -13,8 +13,10 @@ export function renderAmpTopRightLabel(
   thinkingLevel: string,
   theme: Theme,
 ): string {
+  const modelLabel = ctx.model?.name ?? ctx.model?.id ?? "no-model";
   const segments = [
     theme.fg("dim", formatSessionCost(sessionCostTotal(ctx))),
+    theme.bold(theme.fg("text", modelLabel)),
     theme.bold(theme.fg(thinkingColor(thinkingLevel), thinkingLevel || "off")),
   ];
   const percent = contextPercent(ctx);

@@ -17,7 +17,7 @@ import {
 export const ampStyle: InputStyleAdapter = {
   id: "amp",
   label: "Amp-inspired",
-  description: "Minimal chrome: cost, thinking, context %, and cwd only",
+  description: "Minimal chrome: cost, model, thinking, context %, and cwd only",
 
   apply(ctx: ExtensionContext, runtime: InputStyleRuntime): void {
     ctx.ui.setHeader(() => new EmptyComponent());
