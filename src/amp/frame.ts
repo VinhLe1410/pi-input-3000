@@ -17,6 +17,8 @@ export interface AmpInputFrame {
   editorLines: string[];
   topRightLabel: string;
   bottomRightLabel: string;
+  topLeftLabel?: string;
+  borderColor?: (text: string) => string;
   autocompleteLines?: string[];
 }
 
@@ -34,52 +36,70 @@ export class AmpInputFrameRenderer {
   render(frame: AmpInputFrame): string[] {
     const width = Math.max(0, frame.width);
     const innerWidth = this.contentWidth(width);
+    const borderColor = frame.borderColor ?? ((text: string) => this.theme.fg("text", text));
+    const topLeftLabel = frame.topLeftLabel ?? "";
     const contentRows = [...frame.editorLines, ""];
     const autocompleteLines = frame.autocompleteLines ?? [];
 
     if (autocompleteLines.length > 0) {
-      contentRows.push(this.renderSuggestionDivider(innerWidth));
+      contentRows.push(this.renderSuggestionDivider(innerWidth, borderColor));
       contentRows.push(...autocompleteLines);
     }
 
     return clampRenderedLines(
       [
-        this.renderTopBorder(width, frame.topRightLabel),
-        ...contentRows.map((line) => this.renderContentRow(line, innerWidth)),
-        this.renderBottomBorder(width, frame.bottomRightLabel),
+        this.renderTopBorder(width, topLeftLabel, frame.topRightLabel, borderColor),
+        ...contentRows.map((line) => this.renderContentRow(line, innerWidth, borderColor)),
+        this.renderBottomBorder(width, frame.bottomRightLabel, borderColor),
       ],
       width,
     );
   }
 
-  private renderTopBorder(width: number, rightLabel: string): string {
+  private renderTopBorder(
+    width: number,
+    leftLabel: string,
+    rightLabel: string,
+    borderColor: (text: string) => string,
+  ): string {
     return fitBorderLabels(
-      "",
+      leftLabel,
       rightLabel,
       width,
-      (text: string) => this.theme.fg("text", text),
-      (text: string) => this.theme.fg("text", text),
+      borderColor,
+      borderColor,
       { left: AMP_CHROME.topLeft, right: AMP_CHROME.topRight },
     );
   }
 
-  private renderBottomBorder(width: number, rightLabel: string): string {
+  private renderBottomBorder(
+    width: number,
+    rightLabel: string,
+    borderColor: (text: string) => string,
+  ): string {
     return fitBorderLabels(
       "",
       rightLabel,
       width,
-      (text: string) => this.theme.fg("text", text),
-      (text: string) => this.theme.fg("text", text),
+      borderColor,
+      borderColor,
       { left: AMP_CHROME.bottomLeft, right: AMP_CHROME.bottomRight },
     );
   }
 
-  private renderContentRow(line: string, innerWidth: number): string {
-    const border = this.theme.fg("text", AMP_CHROME.vertical);
+  private renderContentRow(
+    line: string,
+    innerWidth: number,
+    borderColor: (text: string) => string,
+  ): string {
+    const border = borderColor(AMP_CHROME.vertical);
     return `${border} ${truncateToWidth(line, innerWidth, "", true)} ${border}`;
   }
 
-  private renderSuggestionDivider(innerWidth: number): string {
-    return this.theme.fg("text", AMP_CHROME.horizontal.repeat(innerWidth));
+  private renderSuggestionDivider(
+    innerWidth: number,
+    borderColor: (text: string) => string,
+  ): string {
+    return borderColor(AMP_CHROME.horizontal.repeat(innerWidth));
   }
 }

@@ -1,4 +1,4 @@
-import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext, Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import {
   contextPercent,
@@ -7,6 +7,29 @@ import {
   sessionCostTotal,
 } from "../shared/session-metrics";
 import { contextColor, thinkingColor } from "../shared/theme";
+
+export type BashModeState = "off" | "with-context" | "no-context";
+
+export function detectBashMode(text: string): BashModeState {
+  if (text.startsWith("!!")) return "no-context";
+  if (text.startsWith("!")) return "with-context";
+  return "off";
+}
+
+const DEFAULT_BORDER_COLOR: ThemeColor = "text";
+
+export function ampBorderColor(state: BashModeState, theme: Theme): (text: string) => string {
+  if (state === "with-context") return (text) => theme.fg("bashMode", text);
+  if (state === "no-context") return (text) => theme.fg("dim", text);
+  return (text) => theme.fg(DEFAULT_BORDER_COLOR, text);
+}
+
+export function renderAmpTopLeftLabel(state: BashModeState, theme: Theme): string {
+  if (state === "off") return "";
+
+  const color = state === "no-context" ? "dim" : "bashMode";
+  return ` ${theme.bold(theme.fg(color, "BASH"))} `;
+}
 
 export function renderAmpTopRightLabel(
   ctx: ExtensionContext,
