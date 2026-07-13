@@ -2,7 +2,8 @@ This project improves Pi Coding Agent UX by keeping user input sticky to the ter
 
 Project layout:
 - `index.ts` is only a compatibility shim; implementation starts at `src/index.ts`.
-- `src/default/` contains the default polished input UI.
+- `src/default/` restores Pi's built-in input UI.
+- `src/input-3000/` contains the polished Input 3000 UI.
 - `src/amp/` contains the Amp-inspired minimal input UI.
 - `src/shared/` contains code shared by input styles.
 - `src/settings/` contains the `/input-style` settings UI.

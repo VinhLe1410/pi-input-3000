@@ -21,7 +21,7 @@ function resetPromptUi(ctx: ExtensionContext): void {
 }
 
 function formatInputStyleLabel(style: InputStyle): string {
-  return style === "amp" ? "Amp-inspired" : "Default";
+  return findInputStyleAdapter(style)?.label ?? style;
 }
 
 export function registerInputStyleLifecycle(

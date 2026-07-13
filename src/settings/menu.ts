@@ -70,9 +70,7 @@ export async function showInputStyleMenu(
     return {
       render(width: number): string[] {
         const adapter = findInputStyleAdapter(selectedStyle);
-        const preview = adapter
-          ? adapter.renderPreview(ctx, width, theme)
-          : [];
+        const preview = adapter?.renderPreview?.(ctx, width, theme) ?? [];
         const lines = [
           theme.fg("accent", theme.bold("Pi Input 3000 Settings")),
           "",
@@ -80,10 +78,9 @@ export async function showInputStyleMenu(
           ...selectList.render(width),
           "",
           renderStickyInputToggle(stickyInput, theme),
+          ...(preview.length > 0 ? ["", ...preview] : []),
           "",
-          ...preview,
-          "",
-          theme.fg("dim", "↑↓ preview • s sticky • enter save • esc cancel"),
+          theme.fg("dim", "↑↓ select • s sticky • enter save • esc cancel"),
         ];
         return renderSettingsFocusFrame(lines, width, theme);
       },

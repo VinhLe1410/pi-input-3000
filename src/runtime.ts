@@ -7,12 +7,12 @@ import type {
   InputStyleRuntime,
   ProjectBranchStatus,
 } from "./input-styles";
-import { createGitState, type GitState } from "./default/repository-status/git-status";
+import { createGitState, type GitState } from "./input-3000/repository-status/git-status";
 import {
   createProjectRefreshController,
   type ProjectRefreshController,
-} from "./default/repository-status/refresh-controller";
-import { BORDER_CHASE, BORDER_CHASE_FRAME_COUNT } from "./default/constants";
+} from "./input-3000/repository-status/refresh-controller";
+import { BORDER_CHASE, BORDER_CHASE_FRAME_COUNT } from "./input-3000/constants";
 import { getThinkingLevel } from "./shared/editor-meta";
 
 export class InputStyleRuntimeController implements InputStyleRuntime {

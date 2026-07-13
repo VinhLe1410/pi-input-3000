@@ -4,8 +4,10 @@ import type { Component, TUI } from "@earendil-works/pi-tui";
 interface StickyUiCaptureCallbacks {
   editorFactoryStarted(tui: TUI): void;
   editorCaptured(tui: TUI, editor: Component): void;
+  editorReset(): void;
   footerFactoryStarted(tui: TUI): void;
   footerCaptured(tui: TUI): void;
+  footerReset(): void;
   probeCaptured(tui: TUI): void;
 }
 
@@ -34,28 +36,34 @@ export function installStickyUiCapture(
   let wrappedSetFooter: ExtensionUIContext["setFooter"] | null = null;
 
   wrappedSetEditor = function setStickyEditorComponent(factory) {
-    const wrapped: EditorFactory | undefined = typeof factory === "function"
-      ? (tui, theme, keybindings) => {
-          callbacks.editorFactoryStarted(tui);
-          const editor = factory(tui, theme, keybindings);
-          callbacks.editorCaptured(tui, editor);
-          return editor;
-        }
-      : factory;
+    if (typeof factory !== "function") {
+      callbacks.editorReset();
+      return originalSetEditor.call(ui, factory);
+    }
+
+    const wrapped: EditorFactory = (tui, theme, keybindings) => {
+      callbacks.editorFactoryStarted(tui);
+      const editor = factory(tui, theme, keybindings);
+      callbacks.editorCaptured(tui, editor);
+      return editor;
+    };
 
     return originalSetEditor.call(ui, wrapped);
   };
   ui.setEditorComponent = wrappedSetEditor;
 
   wrappedSetFooter = function setStickyFooter(factory) {
-    const wrapped: FooterFactory = typeof factory === "function"
-      ? (tui, theme, footerData) => {
-          callbacks.footerFactoryStarted(tui);
-          const footer = factory(tui, theme, footerData);
-          callbacks.footerCaptured(tui);
-          return footer;
-        }
-      : factory;
+    if (typeof factory !== "function") {
+      callbacks.footerReset();
+      return originalSetFooter.call(ui, factory);
+    }
+
+    const wrapped: NonNullable<FooterFactory> = (tui, theme, footerData) => {
+      callbacks.footerFactoryStarted(tui);
+      const footer = factory(tui, theme, footerData);
+      callbacks.footerCaptured(tui);
+      return footer;
+    };
 
     return originalSetFooter.call(ui, wrapped);
   };

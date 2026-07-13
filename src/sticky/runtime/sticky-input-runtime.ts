@@ -105,12 +105,22 @@ export class StickyInputRuntime {
         installRetryIndex = 0;
         scheduleInstall();
       },
+      editorReset: () => {
+        capturedEditor = null;
+        installRetryIndex = 0;
+        disposeCompositor();
+        scheduleInstall();
+      },
       footerFactoryStarted: (tui) => {
         capturedTui ??= tui;
         disposeCompositor();
       },
       footerCaptured: (tui) => {
         capturedTui ??= tui;
+        scheduleInstall();
+      },
+      footerReset: () => {
+        disposeCompositor();
         scheduleInstall();
       },
       probeCaptured: (tui) => {

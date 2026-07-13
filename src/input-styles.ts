@@ -2,10 +2,11 @@ import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
 import { ampStyle } from "./amp/adapter";
 import { defaultStyle } from "./default/adapter";
+import { input3000Style } from "./input-3000/adapter";
 
-export type InputStyle = "default" | "amp";
+export type InputStyle = "default" | "input-3000" | "amp";
 
-export const INPUT_STYLES: readonly InputStyle[] = ["default", "amp"];
+export const INPUT_STYLES: readonly InputStyle[] = ["default", "input-3000", "amp"];
 
 export interface InputStyleConfig {
   style: InputStyle;
@@ -43,11 +44,12 @@ export interface InputStyleAdapter {
   readonly capabilities?: InputStyleCapabilities;
   createWorkingMessage?(): string;
   apply(ctx: ExtensionContext, runtime: InputStyleRuntime): void;
-  renderPreview(ctx: ExtensionContext, width: number, theme: Theme): string[];
+  renderPreview?(ctx: ExtensionContext, width: number, theme: Theme): string[];
 }
 
 export const inputStyleAdapters: readonly InputStyleAdapter[] = [
   defaultStyle,
+  input3000Style,
   ampStyle,
 ];
 
