@@ -1,27 +1,16 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import {
-  loadInputStyleConfig,
-  saveInputStyleConfig,
-} from "./config";
+import { loadInputStyleConfig, saveInputStyleConfig } from "./config";
 import {
   findInputStyleAdapter,
   type InputStyle,
   type InputStyleConfig,
 } from "./input-styles";
 import type { InputStyleRuntimeController } from "./runtime";
-import type { StickyInputController } from "./sticky/install-sticky-input";
 import { showInputStyleMenu } from "./settings/menu";
-
-function resetPromptUi(ctx: ExtensionContext): void {
-  ctx.ui.setHeader(undefined);
-  ctx.ui.setFooter(undefined);
-  ctx.ui.setWorkingMessage();
-  ctx.ui.setWorkingIndicator();
-  ctx.ui.setWorkingVisible(true);
-}
+import type { StickyInputController } from "./sticky/install-sticky-input";
 
 function formatInputStyleLabel(style: InputStyle): string {
-  return findInputStyleAdapter(style)?.label ?? style;
+  return findInputStyleAdapter(style).label;
 }
 
 export function registerInputStyleLifecycle(
@@ -32,11 +21,8 @@ export function registerInputStyleLifecycle(
   let activeConfig: InputStyleConfig = loadInputStyleConfig();
 
   function applyInputStyle(ctx: ExtensionContext, style: InputStyle): void {
-    const adapter = findInputStyleAdapter(style);
-    if (!adapter) return;
-
     activeConfig = { ...activeConfig, style };
-    runtime.applyStyle(ctx, adapter);
+    runtime.applyStyle(ctx, findInputStyleAdapter(style));
   }
 
   function applyConfig(ctx: ExtensionContext, config: InputStyleConfig): void {
@@ -74,40 +60,24 @@ export function registerInputStyleLifecycle(
 
   pi.on("session_start", (_event, ctx) => {
     runtime.refreshThinkingLevel(ctx);
+    if (ctx.mode !== "tui") return;
 
-    if (ctx.mode !== "tui") {
-      runtime.setPromptUiActive(false);
-      return;
-    }
-
-    runtime.setPromptUiActive(true);
     activeConfig = loadInputStyleConfig();
     applyInputStyle(ctx, activeConfig.style);
   });
 
-  pi.on("session_shutdown", (_event, ctx) => {
-    runtime.deactivateStyle(ctx);
+  pi.on("session_shutdown", () => {
+    // Pi resets extension-owned UI before invalidating the session.
     runtime.shutdown();
-
-    if (ctx.mode === "tui") resetPromptUi(ctx);
-  });
-
-  pi.on("turn_start", () => {
-    runtime.handleTurnStart();
   });
 
   pi.on("agent_start", () => {
-    runtime.startBorderChase();
+    runtime.startAgentTimer();
   });
 
-  pi.on("agent_end", () => {
-    runtime.stopBorderChase();
+  pi.on("agent_settled", (_event, ctx) => {
+    runtime.handleAgentSettled(ctx);
   });
-
-  pi.on("turn_end", (_event, ctx) => {
-    runtime.handleTurnEnd(ctx);
-  });
-
   pi.on("message_end", () => {
     runtime.requestRender();
   });
@@ -121,7 +91,7 @@ export function registerInputStyleLifecycle(
   });
 
   pi.on("model_select", (_event, ctx) => {
-    runtime.handleModelSelect(ctx);
+    runtime.refreshThinkingLevelAndRender(ctx);
   });
 
   pi.on("thinking_level_select", (_event, ctx) => {

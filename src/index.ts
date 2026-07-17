@@ -11,7 +11,7 @@ export default function (pi: ExtensionAPI) {
 
   registerInputStyleLifecycle(
     pi,
-    new InputStyleRuntimeController(),
+    new InputStyleRuntimeController(pi),
     stickyInput,
   );
 }

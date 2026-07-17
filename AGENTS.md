@@ -1,11 +1,10 @@
-This project improves Pi Coding Agent UX by keeping user input sticky to the terminal bottom and styling it in two ways.
+This project improves Pi Coding Agent UX with an Amp-inspired input and optional sticky terminal input.
 
 Project layout:
 - `index.ts` is only a compatibility shim; implementation starts at `src/index.ts`.
 - `src/default/` restores Pi's built-in input UI.
-- `src/input-3000/` contains the polished Input 3000 UI.
 - `src/amp/` contains the Amp-inspired minimal input UI.
-- `src/shared/` contains code shared by input styles.
+- `src/shared/` contains code shared by the input UI.
 - `src/settings/` contains the `/input-style` settings UI.
 - `src/sticky/` contains the sticky terminal split implementation.
 

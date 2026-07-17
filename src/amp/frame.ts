@@ -4,10 +4,10 @@ import { clampRenderedLines } from "../shared/rendering";
 import { fitBorderLabels } from "./labels";
 
 const AMP_CHROME = {
-  topLeft: "╭",
-  topRight: "╮",
-  bottomLeft: "╰",
-  bottomRight: "╯",
+  topLeft: "╭─",
+  topRight: "─╮",
+  bottomLeft: "╰─",
+  bottomRight: "─╯",
   vertical: "│",
   horizontal: "─",
 } as const;
@@ -16,6 +16,7 @@ export interface AmpInputFrame {
   width: number;
   editorLines: string[];
   topRightLabel: string;
+  bottomLeftLabel?: string;
   bottomRightLabel: string;
   topLeftLabel?: string;
   borderColor?: (text: string) => string;
@@ -50,7 +51,12 @@ export class AmpInputFrameRenderer {
       [
         this.renderTopBorder(width, topLeftLabel, frame.topRightLabel, borderColor),
         ...contentRows.map((line) => this.renderContentRow(line, innerWidth, borderColor)),
-        this.renderBottomBorder(width, frame.bottomRightLabel, borderColor),
+        this.renderBottomBorder(
+          width,
+          frame.bottomLeftLabel ?? "",
+          frame.bottomRightLabel,
+          borderColor,
+        ),
       ],
       width,
     );
@@ -74,11 +80,12 @@ export class AmpInputFrameRenderer {
 
   private renderBottomBorder(
     width: number,
+    leftLabel: string,
     rightLabel: string,
     borderColor: (text: string) => string,
   ): string {
     return fitBorderLabels(
-      "",
+      leftLabel,
       rightLabel,
       width,
       borderColor,

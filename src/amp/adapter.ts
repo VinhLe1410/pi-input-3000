@@ -17,7 +17,7 @@ import {
 export const ampStyle: InputStyleAdapter = {
   id: "amp",
   label: "Amp-inspired",
-  description: "Minimal chrome: cost, model, thinking, context %, and cwd only",
+  description: "Minimal chrome with timer, Git, cost, model, thinking, context use, and cwd",
 
   apply(ctx: ExtensionContext, runtime: InputStyleRuntime): void {
     ctx.ui.setHeader(() => new EmptyComponent());
@@ -33,6 +33,8 @@ export const ampStyle: InputStyleAdapter = {
         keybindings,
         ctx,
         () => runtime.getThinkingLevel(ctx),
+        () => runtime.getAgentTimer(),
+        () => runtime.currentGit(),
         ctx.ui.theme,
       );
     });

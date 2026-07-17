@@ -1,5 +1,7 @@
 import type { ExtensionContext, Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import type { AgentTimerState } from "../input-styles";
+import type { GitStatusSummary } from "./git-status";
 import {
   contextPercent,
   formatCwd,
@@ -24,11 +26,26 @@ export function ampBorderColor(state: BashModeState, theme: Theme): (text: strin
   return (text) => theme.fg(DEFAULT_BORDER_COLOR, text);
 }
 
-export function renderAmpTopLeftLabel(state: BashModeState, theme: Theme): string {
-  if (state === "off") return "";
+export function renderAmpTopLeftLabel(
+  state: BashModeState,
+  agentTimer: AgentTimerState | undefined,
+  theme: Theme,
+): string {
+  const segments: string[] = [];
 
-  const color = state === "no-context" ? "dim" : "bashMode";
-  return ` ${theme.bold(theme.fg(color, "$"))} `;
+  if (state !== "off") {
+    const color = state === "no-context" ? "dim" : "bashMode";
+    segments.push(theme.bold(theme.fg(color, "$")));
+  }
+
+  if (agentTimer) {
+    const color = agentTimer.active ? "accent" : "dim";
+    segments.push(theme.fg(color, `${agentTimer.seconds}s`));
+  }
+
+  return segments.length > 0
+    ? ` ${segments.join(theme.fg("borderMuted", " · "))} `
+    : "";
 }
 
 export function renderAmpTopRightLabel(
@@ -51,6 +68,56 @@ export function renderAmpTopRightLabel(
   return ` ${segments.join(theme.fg("borderMuted", " – "))} `;
 }
 
+function takeEndToWidth(text: string, maxWidth: number): string {
+  let result = "";
+
+  for (const character of Array.from(text).reverse()) {
+    const next = `${character}${result}`;
+    if (visibleWidth(next) > maxWidth) break;
+    result = next;
+  }
+
+  return result;
+}
+
+function truncateMiddle(text: string, maxWidth: number): string {
+  if (visibleWidth(text) <= maxWidth) return text;
+  if (maxWidth <= 0) return "";
+  if (maxWidth === 1) return "…";
+
+  const availableWidth = maxWidth - 1;
+  const prefixWidth = Math.max(1, Math.floor(availableWidth * 0.4));
+  const suffixWidth = Math.max(0, availableWidth - prefixWidth);
+  const prefix = truncateToWidth(text, prefixWidth, "");
+  const suffix = takeEndToWidth(text, suffixWidth);
+  return `${prefix}…${suffix}`;
+}
+
+export function renderAmpBottomLeftLabel(
+  git: GitStatusSummary,
+  width: number,
+  theme: Theme,
+): string {
+  if (!git.branch) return "";
+
+  const statusLabels = [
+    ...(git.dirty ? ["*"] : []),
+    ...(git.ahead > 0 ? [`↑${git.ahead}`] : []),
+    ...(git.behind > 0 ? [`↓${git.behind}`] : []),
+  ];
+  const maxContentWidth = Math.max(1, Math.min(36, Math.floor(width * 0.4)) - 2);
+  const statusWidth = statusLabels.reduce((total, label) => total + visibleWidth(label), 0);
+  const separatorWidth = statusLabels.length;
+  const branchWidth = Math.max(1, maxContentWidth - statusWidth - separatorWidth);
+  const branch = theme.fg("text", truncateMiddle(git.branch, branchWidth));
+  const statuses = [
+    ...(git.dirty ? [theme.bold(theme.fg("warning", "*"))] : []),
+    ...(git.ahead > 0 ? [theme.fg("success", `↑${git.ahead}`)] : []),
+    ...(git.behind > 0 ? [theme.fg("error", `↓${git.behind}`)] : []),
+  ];
+
+  return ` ${[branch, ...statuses].join(" ")} `;
+}
 export function renderAmpBottomRightLabel(ctx: ExtensionContext, theme: Theme): string {
   return theme.fg("muted", ` ${formatCwd(ctx.cwd)} `);
 }

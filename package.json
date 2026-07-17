@@ -1,14 +1,14 @@
 {
   "name": "pi-custom-input",
   "private": true,
-  "description": "Pi input UI with animated prompt chrome and status footer",
+  "description": "Amp-inspired and sticky input UI for Pi Coding Agent",
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.79.0",
-    "@earendil-works/pi-tui": "0.79.0",
+    "@earendil-works/pi-coding-agent": "0.80.10",
+    "@earendil-works/pi-tui": "0.80.10",
     "@types/node": "24.13.1",
     "eslint": "^10.5.0",
     "typescript": "5.9.3",

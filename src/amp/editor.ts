@@ -5,17 +5,21 @@ import type {
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
+import type { InputStyleRuntime } from "../input-styles";
 import { renderFramedEditor } from "../shared/framed-editor";
 import { AmpInputFrameRenderer } from "./frame";
 import {
   ampBorderColor,
   detectBashMode,
+  renderAmpBottomLeftLabel,
   renderAmpBottomRightLabel,
   renderAmpTopLeftLabel,
   renderAmpTopRightLabel,
 } from "./labels";
 
 export class AmpInputEditor extends CustomEditor {
+  private getAgentTimer: InputStyleRuntime["getAgentTimer"];
+  private getGitStatus: InputStyleRuntime["currentGit"];
   private getThinkingLevel: () => string;
   private labelTheme: Theme;
   private ctx: ExtensionContext;
@@ -27,11 +31,15 @@ export class AmpInputEditor extends CustomEditor {
     keybindings: KeybindingsManager,
     ctx: ExtensionContext,
     getThinkingLevel: () => string,
+    getAgentTimer: InputStyleRuntime["getAgentTimer"],
+    getGitStatus: InputStyleRuntime["currentGit"],
     labelTheme: Theme,
   ) {
     super(tui, theme, keybindings, { paddingX: 0 });
     this.ctx = ctx;
     this.getThinkingLevel = getThinkingLevel;
+    this.getAgentTimer = getAgentTimer;
+    this.getGitStatus = getGitStatus;
     this.labelTheme = labelTheme;
     this.frameRenderer = new AmpInputFrameRenderer(labelTheme);
   }
@@ -48,10 +56,19 @@ export class AmpInputEditor extends CustomEditor {
       renderFrame: ({ editorFrame, autocompleteLines }) => this.frameRenderer.render({
         width,
         editorLines: editorFrame,
-        topLeftLabel: renderAmpTopLeftLabel(bashMode, this.labelTheme),
+        topLeftLabel: renderAmpTopLeftLabel(
+          bashMode,
+          this.getAgentTimer(),
+          this.labelTheme,
+        ),
         topRightLabel: renderAmpTopRightLabel(
           this.ctx,
           this.getThinkingLevel(),
+          this.labelTheme,
+        ),
+        bottomLeftLabel: renderAmpBottomLeftLabel(
+          this.getGitStatus(),
+          width,
           this.labelTheme,
         ),
         bottomRightLabel: renderAmpBottomRightLabel(this.ctx, this.labelTheme),
