@@ -4,6 +4,7 @@
   "description": "Amp-inspired and sticky input UI for Pi Coding Agent",
   "scripts": {
     "lint": "eslint .",
+    "test": "node --experimental-strip-types --test tests/**/*.test.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {

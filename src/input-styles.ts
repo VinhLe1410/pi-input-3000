@@ -1,5 +1,5 @@
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import type { TUI } from "@earendil-works/pi-tui";
+import type { Component, TUI } from "@earendil-works/pi-tui";
 import type { GitStatusSummary } from "./amp/git-status";
 import { ampStyle } from "./amp/adapter";
 import { defaultStyle } from "./default/adapter";
@@ -20,7 +20,7 @@ export interface InputStyleRuntime {
   currentGit(): GitStatusSummary;
   getAgentTimer(): AgentTimerState | undefined;
   getThinkingLevel(ctx: ExtensionContext): string;
-  registerActiveTui(tui: TUI | undefined): void;
+  registerActiveEditor(tui: TUI, editor: Component): void;
   requestRender(): void;
 }
 

@@ -24,10 +24,10 @@ export const ampStyle: InputStyleAdapter = {
     ctx.ui.setWorkingMessage();
     ctx.ui.setWorkingIndicator();
     ctx.ui.setWorkingVisible(true);
+    ctx.ui.setFooter(() => new EmptyComponent());
 
     ctx.ui.setEditorComponent((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
-      runtime.registerActiveTui(tui);
-      return new AmpInputEditor(
+      const editor = new AmpInputEditor(
         tui,
         theme,
         keybindings,
@@ -37,9 +37,9 @@ export const ampStyle: InputStyleAdapter = {
         () => runtime.currentGit(),
         ctx.ui.theme,
       );
+      runtime.registerActiveEditor(tui, editor);
+      return editor;
     });
-
-    ctx.ui.setFooter(() => new EmptyComponent());
   },
 
   renderPreview(ctx: ExtensionContext, width: number, theme: Theme): string[] {

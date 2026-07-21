@@ -13,8 +13,9 @@ import { contextColor, thinkingColor } from "../shared/theme";
 export type BashModeState = "off" | "with-context" | "no-context";
 
 export function detectBashMode(text: string): BashModeState {
-  if (text.startsWith("!!")) return "no-context";
-  if (text.startsWith("!")) return "with-context";
+  const normalized = text.trimStart();
+  if (normalized.startsWith("!!")) return "no-context";
+  if (normalized.startsWith("!")) return "with-context";
   return "off";
 }
 
