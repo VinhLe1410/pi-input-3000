@@ -1,8 +1,6 @@
 # Pi Custom Input
 
-An Amp-inspired input for Pi Coding Agent, with an optional sticky terminal layout that keeps the editor visible while chat history scrolls.
-
-**Note: It's riced up for now, I'm slowly getting bored of it and prefer minimalism**
+Custom user input styling and customization for Pi Coding Agent. Has the option to select an Amp-inspired input styling, as well as the ability to pin the user input to the bottom of the terminal.
 
 https://github.com/user-attachments/assets/d05d8ce4-130b-463b-b0ec-68ecd6425ac1
 
