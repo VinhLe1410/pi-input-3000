@@ -2,7 +2,9 @@
 
 An Amp-inspired input for Pi Coding Agent, with an optional sticky terminal layout that keeps the editor visible while chat history scrolls.
 
-https://github.com/user-attachments/assets/26a42a07-b4f0-4419-ac40-c9c7be68c181
+**Note: It's riced up for now, I'm slowly getting bored of it and prefer minimalism**
+
+https://github.com/user-attachments/assets/d05d8ce4-130b-463b-b0ec-68ecd6425ac1
 
 ## Feature list
 
